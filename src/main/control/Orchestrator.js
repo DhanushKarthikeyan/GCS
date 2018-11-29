@@ -1,7 +1,7 @@
 export default class Orchestrator {
   constructor() {
     this.scheduledMissions = [];
-    this.currentMission = null;
+    this.currentMission = 0;
     this.nextMission = null;
     this.passToNext = null;
 
@@ -26,5 +26,18 @@ export default class Orchestrator {
     } else {
       console.warn('In Class `Orchestrator`, method `addMission`: Received an object constructed with', mission.constructor.name);
     }
+  }
+  
+  startMission(mission, requiredData) {
+	  this.scheduledMissions[this.currentMission].start(requiredData);
+	}
+
+  endMission(nextRequired) {
+    this.passToNext = nextRequired;
+    this.currentMission++;
+  }
+  
+  currentMissionName() {
+    return this.scheduledMissions[this.currentMission].getName();
   }
 }
