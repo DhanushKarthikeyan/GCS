@@ -35,13 +35,6 @@ const darwinMenu = {
     { role: 'hideothers' },
     { role: 'unhide' },
     { type: 'separator' },
-    {
-      label: 'Quit',
-      accelerator: 'CommandOrControl+Q',
-      click() {
-        window.destroy();
-      },
-    },
   ],
 };
 const isDevelopment = process.env.NODE_ENV !== 'production';
@@ -117,7 +110,7 @@ const menu = [
     submenu: [
       {
         label: 'Help',
-        click() { shell.openExternal('https://github.com/NGCP/missioncontrol'); },
+        click() { shell.openExternal('https://github.com/NGCP/GCS/wiki'); },
       },
     ],
   },
@@ -146,6 +139,10 @@ app.on('ready', () => {
 });
 
 ipcMain.on('post', (event, notification, data) => window.webContents.send(notification, data));
+
+
+//ipcMain.on('G_index_SIGNAL_RequestForDisplayInput', (event, notification, data) => window.webContents.send('R_index_GUI_DynamicDisplayInput', { data: }))
+
 
 function createMainWindow() {
   window = new BrowserWindow({
@@ -197,7 +194,7 @@ function createMenu() {
   if (process.platform === 'darwin') {
     menu.unshift(darwinMenu);
   } else {
-    menu.push({ role: 'quit' });
+    menu[0].submenu.push({ role: 'quit' });
   }
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(menu));

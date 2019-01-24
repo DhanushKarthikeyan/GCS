@@ -1,3 +1,4 @@
+import { ipcRenderer } from 'electron';
 import React, { Component } from 'react';
 
 import TableRow from '../../util/TableRow.js';
@@ -56,6 +57,10 @@ export default class MissionContainer extends Component {
     };
   }
 
+  missionSetupView() {
+    ipcRenderer.send('post', 'R_index_GUI_ChangeViewState', { view: 'MISSION_SETUP' });
+  }
+
   render() {
     const { missions } = this.state;
 
@@ -79,6 +84,9 @@ export default class MissionContainer extends Component {
             }
           </tbody>
         </table>
+        <div>
+          <button onClick={this.missionSetupView}>Mission Setup</button>
+        </div>
       </div>
     );
   }
