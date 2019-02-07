@@ -7,7 +7,7 @@ export default class Orchestrator {
       type: 'failure',
       message: failureMessage,
     };
-    console.log('FAILURE: ', failureMessage);
+    console.log('FAILURE: (in Class `Orchestrator`) ', failureMessage);
     ipcRenderer.send('post', 'updateMessages', ipcMessage);
   }
 
@@ -106,6 +106,10 @@ export default class Orchestrator {
   currentMissionName() {
     return this.scheduledMissions[this.currentMission].getName();
   }
+
+////////////////////////////////////////////////////////////////////////////////
+// MOVE THE FOLLOWING TO MESSAGEHANDLER
+////////////////////////////////////////////////////////////////////////////////
 
   /**
     *   Sends/Schedules to send a message to a Vehicle.
