@@ -20,15 +20,16 @@ const geolocation = true;
 class Index extends Component {
   constructor() {
     super();
-    this.state = { view: 'MAIN_MENU' };
+    this.state = { view: 'MAIN' };
 
-    ipcRenderer.on('R_index_GUI_ChangeViewState', (event, data) => this.setState({ view: data.view }));
+    ipcRenderer.on('R_index_GUI_DisplayMissionSetupView', () => this.setState({ view: 'MISSION_SETUP' }));
+    ipcRenderer.on('R_index_GUI_DisplayMainView', () => this.setState({ view: 'MAIN' }));
 
     // Bind Methods.
     this.closeMissionSetupView = this.closeMissionSetupView.bind(this);
   }
 
-  mainMenuView() {
+  mainView() {
     return (
       <div className='gridWrapper'>
         <MapContainer />
@@ -40,7 +41,7 @@ class Index extends Component {
   }
 
   closeMissionSetupView() {
-    this.setState({ view: 'MAIN_MENU' });
+    this.setState({ view: 'MAIN' });
   }
 
   missionSetupView() {
@@ -53,16 +54,14 @@ class Index extends Component {
   }
 
   render() {
-    if (this.state.view === 'MAIN_MENU') {
-      return this.mainMenuView();
+    if (this.state.view === 'MAIN') {
+      return this.mainView();
     } else if (this.state.view === 'MISSION_SETUP') {
       return this.missionSetupView();
     } else {
-      return (
-        <div>
-          An error occurred; an unknown render index state was entered.
-        </div>
-      );
+      // An invalid state view was encountered, and main view was autoselected
+      this.setState({ view: 'MAIN' });
+      return this.mainView();
     }
   }
 }

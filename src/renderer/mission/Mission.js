@@ -58,7 +58,7 @@ export default class MissionContainer extends Component {
   }
 
   missionSetupView() {
-    ipcRenderer.send('post', 'R_index_GUI_ChangeViewState', { view: 'MISSION_SETUP' });
+    ipcRenderer.send('post', 'R_index_GUI_DisplayMissionSetupView');
   }
 
   render() {
