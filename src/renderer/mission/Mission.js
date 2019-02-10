@@ -66,6 +66,9 @@ export default class MissionContainer extends Component {
 
     return (
       <div className='missionContainer container'>
+        <div>
+          <button onClick={this.missionSetupView}>Mission Setup</button>
+        </div>
         <table>
           <thead>
             <tr>
@@ -84,9 +87,6 @@ export default class MissionContainer extends Component {
             }
           </tbody>
         </table>
-        <div>
-          <button onClick={this.missionSetupView}>Mission Setup</button>
-        </div>
       </div>
     );
   }

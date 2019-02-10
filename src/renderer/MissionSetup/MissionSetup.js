@@ -7,10 +7,10 @@ export default class MissionSetup extends Component {
   constructor() {
     super();
 
-    // These are the available states from which the sytem can select from
-    // Note that the order matters, as a state later in the array cannot be peformed
-    // before the entries earlier in the array.
-    this.state = {
+    // This serves to keep a backup copy othe initial starting state
+    // The current state is used to render and thus has the "active" working set
+    // of the state data
+    this.initialState = {
       startMission: null,
       endMission: null,
       availableMissionSetupStates:
@@ -22,11 +22,17 @@ export default class MissionSetup extends Component {
       ],
     };
 
+    // These are the available states from which the sytem can select from
+    // Note that the order matters, as a state later in the array cannot be peformed
+    // before the entries earlier in the array.
+    this.state = { ...this.initialState };
+
     // ipcRenderer.on('R_MissionSetup_DATA_MissionSetupStatesSelected');
   }
 
-  setStartState(startState) {
-    //this.setState();
+  setStartState(e) {
+    const start_state_index = e.currentTarget.dataset.id;
+    this.setState({ startMission: start_state_index });
   }
 
   render() {
@@ -37,11 +43,11 @@ export default class MissionSetup extends Component {
         <h1>MissionSetup</h1>
         <div>
           {
-            availableMissionSetupStates.map(setupState =>
+            availableMissionSetupStates.map((setupState, index) =>
               <div key={setupState.name}>
                 <h3>{setupState.name}</h3>
-                <button onClick={this.setStartState}>Select Start</button>
-                <button onClick={this.setStartState}>Select End</button>
+                <button onClick={this.setStartState} data-id={index}>Select Start</button>
+                <button onClick={this.setStartState} data-id={index}>Select End</button>
               </div>
             )
           }
