@@ -9,9 +9,9 @@ const describe = mocha.describe;
 const it = mocha.it;
 const beforeEach = mocha.beforeEach;
 
-import ISRMission from '../main/control/Missions/ISRMission';
-import Vehicle from '../main/control/Vehicle';
-import Task from '../main/control/Task';
+import ISRMission from '../src/main/control/Missions/ISRMission';
+import Vehicle from '../src/main/control/Vehicle';
+import Task from '../src/main/control/Task';
 
 /*
  * Mission & Mission Subclass tests

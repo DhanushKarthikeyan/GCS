@@ -160,7 +160,7 @@ export default class Mission {
 
       // Reassign task if any are waiting.
       if (this.waitingTasks.countItemsForKey(vehcJob) > 0) {
-        const newTask = this.waitingTasks.get(vehcJob);
+        const newTask = this.waitingTasks.get(vehcJob, { vehicle: sender });
 
         sender.assignTask(newTask);
         this.activeTasks.set(sender, newTask);
