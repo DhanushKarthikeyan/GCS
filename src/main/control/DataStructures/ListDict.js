@@ -29,9 +29,10 @@ export default class ListDict {
    * Returns the value in the dictionary according to the provided getter method
    *
    * @param {Any} key the key for the item.
+   * @param {Any} getterParam an additional parameter that is given to the get method.
    * @returns {Any} the value in the list
    */
-  get(key) {
+  get(key, getterParam) {
     if (!(key in this.dict) || this.dict[key].length <= 0) {
       if (this.default_value !== undefined) {
         return this.default_value;
@@ -41,9 +42,9 @@ export default class ListDict {
     } else {
       this.item_count--;
       if (key in this.key_get_methods) {
-        return this.dict[key].splice(this.key_get_methods[key](this.dict[key]), 1)[0];
+        return this.dict[key].splice(this.key_get_methods[key](this.dict[key], getterParam), 1)[0];
       }
-      return this.dict[key].splice(this.get_method(this.dict[key]), 1)[0];
+      return this.dict[key].splice(this.get_method(this.dict[key], getterParam), 1)[0];
     }
   }
 

@@ -9,7 +9,7 @@ const describe = mocha.describe;
 const it = mocha.it;
 const beforeEach = mocha.beforeEach;
 
-import ListDict from '../main/control/DataStructures/ListDict';
+import ListDict from '../src/main/control/DataStructures/ListDict';
 
 describe('ListDict', () => {
   describe('+ get()', () => {

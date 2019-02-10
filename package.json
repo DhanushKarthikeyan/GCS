@@ -4,8 +4,8 @@
   "description": "Ground Control Station for autonomous vehicle platforms in NGCP",
   "main": "src/index.js",
   "scripts": {
-    "test": "eslint . --ext .js | stylelint \"**/*.css\" && mocha src/test --compilers js:@babel/register",
-    "unittest": "mocha src/test --compilers js:@babel/register",
+    "test": "eslint . --ext .js | stylelint \"**/*.css\" && mocha test --require @babel/register",
+    "unittest": "mocha test --require @babel/register",
     "linttest": "eslint . --ext .js | stylelint \"**/*.css\"",
     "lint": "eslint . --fix --ext .js | stylelint \"**/*.css\" --fix",
     "start": "electron-webpack dev",
