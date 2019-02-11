@@ -4,6 +4,17 @@ import React, { Component } from 'react';
 import './MissionSetup.css';
 
 export default class MissionSetup extends Component {
+
+  setStartState = (e) => {
+    const start_state_index = e.currentTarget.dataset.id;
+    this.setState({ startMission: start_state_index });
+  }
+
+  setEndState = (e) => {
+    const end_state_index = e.currentTarget.dataset.id;
+    this.setState({ endMission: end_state_index });
+  }
+
   constructor() {
     super();
 
@@ -13,6 +24,7 @@ export default class MissionSetup extends Component {
     this.initialState = {
       startMission: null,
       endMission: null,
+      ready: false,
       availableMissionSetupStates:
       [
         { name: 'ISR', class: 'ISRMissionView' },
@@ -30,13 +42,8 @@ export default class MissionSetup extends Component {
     // ipcRenderer.on('R_MissionSetup_DATA_MissionSetupStatesSelected');
   }
 
-  setStartState(e) {
-    const start_state_index = e.currentTarget.dataset.id;
-    this.setState({ startMission: start_state_index });
-  }
-
   render() {
-    const { availableMissionSetupStates } = this.state;
+    const { availableMissionSetupStates, ready } = this.state;
 
     return (
       <div>
@@ -51,6 +58,7 @@ export default class MissionSetup extends Component {
               </div>
             )
           }
+        <button onClick={this.setStartState} enabled={ready}>Next ...</button>
         </div>
       </div>
     );
