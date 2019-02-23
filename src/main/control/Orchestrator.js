@@ -1,8 +1,7 @@
 import { ipcRenderer } from 'electron';
 
 export default class Orchestrator {
-
-  static reportFailure(failureMessage) {
+  static log(failureMessage) {
     const ipcMessage = {
       type: 'failure',
       message: failureMessage,
@@ -107,9 +106,23 @@ export default class Orchestrator {
     return this.scheduledMissions[this.currentMission].getName();
   }
 
-////////////////////////////////////////////////////////////////////////////////
-// MOVE THE FOLLOWING TO MESSAGEHANDLER
-////////////////////////////////////////////////////////////////////////////////
+  /**
+   *    Returns a Vehicle object based on its ID
+   *    @param {int} vID: vehicle ID
+   *    @returns {Vehicle} v: non-null on success; null on failure
+   */
+  static getVehicleByID(vID) {
+    for (const v of this.knownVehicles) {
+      if (v.id === vID) {
+        return v;
+      }
+    }
+    return null;
+  }
+
+  // //////////////////////////////////////////////////////////////////////////////
+  // MOVE THE FOLLOWING TO MESSAGEHANDLER
+  // //////////////////////////////////////////////////////////////////////////////
 
   /**
     *   Sends/Schedules to send a message to a Vehicle.
@@ -118,7 +131,7 @@ export default class Orchestrator {
     *   @param {JSON} message: the message to send to the vehicle with UID `vehicleID`
     */
   sendMessage(vehicleID, message) {
-    this.selectVehicle(vehicleID).sendMessage(message);
+    this.getVehicleByID(vehicleID).sendMessage(message);
   }
 
   /**
@@ -128,7 +141,7 @@ export default class Orchestrator {
     *   @param {JSON} message: The message that was received from the vehicle
     */
   handleReceivedMessage(message) {
-    const srcVehicle = this.selectVehicle(message.srcVehicleID);
+    const srcVehicle = this.getVehicleByID(message.srcVehicleID);
     const ackMessage = { type: 'ack', received: message.type };
     this.sendMessage(message.srcVehicleID, ackMessage);
     switch (message.type) {
@@ -138,7 +151,7 @@ export default class Orchestrator {
         }
         break;
       case 'ACK' || 'ack':
-        srcVehicle.acknowledged(message.type)
+        srcVehicle.acknowledged(message.type);
         break;
       case 'CONNECT' || 'connect':
         this.addVehicle(new Vehicle(message.srcVehicleID, message.vehicleType, message.jobsAvailable));
