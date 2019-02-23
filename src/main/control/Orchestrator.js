@@ -1,4 +1,7 @@
 import { ipcRenderer } from 'electron';
+import { Mission } from './Mission';
+import { Vehicle } from './Vehicle';
+import { MessageHandler } from './MessageHandler';
 
 export default class Orchestrator {
   static log(failureMessage) {
@@ -13,13 +16,21 @@ export default class Orchestrator {
   /**
     *   Creates an instance of an Orchestrator
     *   @constructor
+    *   @param {MessageHandler} messageHandler : For message processing
     *   @this {Orchestrator}
     */
-  constructor() {
+  constructor(messageHandler) {
     this.scheduledMissions = [];
     this.currentMission = 0;
     this.nextMissionRequiredData = null;
     this.knownVehicles = [];
+    if ((messageHandler === null) ||
+        (messageHandler === undefined) ||
+        !(messageHandler instanceof MessageHandler)) {
+      this.messageHandler = MessageHandler(this);
+    } else {
+      this.messageHandler = messageHandler;
+    }
   }
 
   /**
@@ -157,7 +168,7 @@ export default class Orchestrator {
         this.addVehicle(new Vehicle(message.srcVehicleID, message.vehicleType, message.jobsAvailable));
         break;
       case 'POI' || 'poi':
-        this.nextMissionRequiredData.poi.push(new Point(message.lat, message.lon));
+        this.nextMissionRequiredData.poi.push({ lat: message.lat, lon: message.lon });
         break;
       case 'COMPLETE' || 'complete':
         srcVehicle.setAvailable(true);

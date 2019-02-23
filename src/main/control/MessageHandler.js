@@ -1,5 +1,7 @@
 import { ipcRenderer } from 'electron';
-import { timeout } from 'q';
+
+import { Orchestrator } from './Orchestrator';
+import { UpdateHandlers } from './DataStructures/UpdateHandler';
 
 /*
 ================================================================================
@@ -28,9 +30,11 @@ export default class MessageHandler {
 
   /**
    * Creates an instance of a MessageHandler
-   * @TODO: complete method
+   * @constructor
+   * @param { Orchestrator } orchestrator : the Orchestrator object
+   * @this { MessageHandler }
    */
-  constructor() {
+  constructor(orchestrator) {
     /* List of JSON obj., ea. repr. 1 msg. */
     this.messageOutbox = [];
     /* List of JSON obj., ea. {ID: , type: } */
@@ -39,6 +43,14 @@ export default class MessageHandler {
     this.messagesReceived = [];
     // this.messageIDSeed = Math.floor(Date.now() / 1000);
     this.messageIDSeed = Date.now();
+    /* Orchestrator */
+    if ((orchestrator === null) ||
+        (orchestrator === undefined) ||
+        !(orchestrator instanceof Orchestrator)) {
+      this.orchestrator = Orchestrator(this);
+    } else {
+      this.orchestrator = orchestrator;
+    }
   }
 
   rmMsg(mID, box) {
@@ -230,7 +242,7 @@ export default class MessageHandler {
     return recipients;
   }
 
-  asyncSendMessage(tgtVehicle, msg) {
+  asyncSendMessage(msg) {
     // Use EventsHandler class to do this
     // Send all messages in the queue
     //
