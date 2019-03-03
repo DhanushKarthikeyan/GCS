@@ -3,7 +3,7 @@
  * by a vehicle to describe how it functions with the rest of the system.
  */
 
-import UpdateHandlers from './DataStructures/UpdateHandler';
+import UpdateHandler from './DataStructures/UpdateHandler';
 
 export default class Vehicle {
   constructor(vehicleId, vehicleJobs, vehicleStatus) {
@@ -22,7 +22,7 @@ export default class Vehicle {
     this.errorHandler = () => {};
 
     // Event update handler object
-    this.updateEventHandlers = new UpdateHandlers();
+    this.updateEventHandlers = new UpdateHandler();
 
     // Add the default update event UpdateHandlers
     this.updateEventHandlers.addHandler('status', (value, full) => {

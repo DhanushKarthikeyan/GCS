@@ -7,7 +7,7 @@
  * an expiry function if the event is not satisfied in time.
  */
 
-export default class UpdateHandlers {
+export default class UpdateHandler {
   constructor() {
     this.event_dict = {};
   }

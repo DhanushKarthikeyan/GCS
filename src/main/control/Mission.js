@@ -6,6 +6,7 @@
  * for information on how to implement a Mission object
  */
 import ListDict from './DataStructures/ListDict';
+import UpdateHandler from './DataStructures/UpdateHandler';
 
 export default class Mission {
   /**
@@ -47,8 +48,13 @@ export default class Mission {
 
     // Active tasks are objects with the vehicles as keys, and the values as the task assigned to them
     this.activeTasks = new Map();
+
+    // Event handler for status updates
+    this.statusUpdateHandler = new UpdateHandler();
   }
 
+  /* eslint-disable valid-jsdoc */
+  /* eslint-disable no-unused-vars */
   /**
    * Creates a Map for each of the job types to a list of Task objects. These tasks are
    * assigned to vehicles available. If there are leftover tasks or leftover vehicles,
@@ -57,11 +63,14 @@ export default class Mission {
    * @param  {Object} missionData Object containing the required input data. Note
    *                              that the missionData object is unmodified from the
    *                              missionStart function.
+   *
    * @returns {Map} the jobs and the task list associated with it (String => Task[])
    */
   generateTasks(missionData) {
     throw new EvalError('generateTasks function must be overridden in subclasses!');
   }
+  /* eslint-enable valid-jsdoc */
+  /* eslint-enable no-unused-vars */
 
   /**
     * Starts the mission with the given mission data input. The input would be the
@@ -115,7 +124,7 @@ export default class Mission {
     }
 
     // Start the mission
-    this.missionStatus = 'RUNNING';
+    this.setStatus('RUNNING');
   }
 
   /**
@@ -206,17 +215,24 @@ export default class Mission {
     this.pendingInitializingVehicles = Array.from(this.activeVehicleMapping.keys());
 
     for (const vehc of this.pendingInitializingVehicles) {
+      /*
+      Assign job; sets the:
+      - job string to assign for this vehicle
+      - the callback function to call when the vehicle enters the READY state
+      - the callback function to call when the vehicle fails to enter the READY state in time
+      - the callback function to call when the vehicle enters an ERROR state
+      */
       vehc.assignJob(this.activeVehicleMapping.get(vehc), () => {
         this.pendingInitializingVehicles = this.pendingInitializingVehicles.filter(v => vehc !== v);
 
         if (this.pendingInitializingVehicles.length === 0) {
           // Mission is ready (done initializing)
           this.logger.log('Mission initialization successful');
-          this.missionStatus = 'READY';
+          this.setStatus('READY');
         }
       }, () => {
         this.logger.log(`Mission initialization timed out while waiting for the vehicle '${vehc}' to initialize`);
-        this.missionStatus = 'WAITING';
+        this.status('WAITING');
       }, mesg => {
         this.logger.log(`'${vehc}' entered an ERROR state: ${mesg}`);
         this.handleUnresponsiveVehicle(vehc);
@@ -224,9 +240,11 @@ export default class Mission {
     }
 
     // Set to pending initialization
-    this.missionStatus = 'INITIALIZING';
+    this.setStatus('INITIALIZING');
   }
 
+  /* eslint-disable valid-jsdoc */
+  /* eslint-disable no-unused-vars */
   /**
    * Get the data at the end of the mission. This data is what is then forwarded
    * through the Orchestrator to the next mission (as the missionStart input data)
@@ -238,6 +256,8 @@ export default class Mission {
   getTerminatedData() {
     throw new EvalError('getTerminatedData function must be overridden in subclasses!');
   }
+  /* eslint-enable valid-jsdoc */
+  /* eslint-enable no-unused-vars */
 
   /**
    * Terminates the current mission by advancing the current mission state.
@@ -252,7 +272,7 @@ export default class Mission {
       vehc.terminate();
     }
 
-    this.missionStatus = 'COMPLETE';
+    this.setStatus('COMPLETE');
     this.completionCallback(this.getTerminatedData());
   }
 
@@ -399,7 +419,7 @@ export default class Mission {
       if (this.activeVehicleMapping.has(vehc)) {
         // Reset the entire active vehicle mapping
         this.activeVehicleMapping.clear();
-        this.missionStatus = 'WAITING';
+        this.setStatus('WAITING');
       }
     } else if (this.missionStatus === 'RUNNING' || this.missionStatus === 'PAUSED') {
       if (this.activeVehicleMapping.has(vehc)) {
@@ -433,5 +453,41 @@ export default class Mission {
         }
       }
     }
+  }
+
+  /* ======================================================================== */
+  /*                Getters and Setters for mission information               */
+  /* ======================================================================== */
+  get name() {
+    return 'Abstract Mission';
+  }
+
+  get status() {
+    return this.missionStatus;
+  }
+
+  setStatus(newStatus) {
+    this.missionStatus = newStatus;
+    this.statusUpdateHandler.event('status', newStatus);
+  }
+
+  /**
+   * Create a listener to fire every time the status is updated
+   *
+   * @param  {Function}  callback the callback to fire when the status changes
+   * @returns {Object} the event object created when adding the handler.
+   *                     This can be used to clear an update handler at a later time.
+   */
+  listenForStatusUpdates(callback) {
+    return this.statusUpdateHandler.addHandler('status', callback);
+  }
+
+  /**
+   * Clear the status listener to no longer receive status updates when the status changes
+   *
+   * @param  {Object} eventObj the event object of the event to clear.
+   */
+  clearStatusUpdateListener(eventObj) {
+    this.statusUpdateHandler.removeHandler(eventObj);
   }
 }

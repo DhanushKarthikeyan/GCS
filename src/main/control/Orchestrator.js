@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron';
 import { Mission } from './Mission';
 import { Vehicle } from './Vehicle';
 import { MessageHandler } from './MessageHandler';
+import { UpdateHandler } from './DataStructures/UpdateHandler';
 
 export default class Orchestrator {
   static log(failureMessage) {
@@ -31,6 +32,8 @@ export default class Orchestrator {
     } else {
       this.messageHandler = messageHandler;
     }
+
+    this.missionObjects = [];
   }
 
   /**
@@ -70,13 +73,74 @@ export default class Orchestrator {
     vehicle.setAvailable(false);
   }
 
+  /*
+  FLOW:
+  1. User selects the missions to create.
+  2. The mission is constructed (but not initialized with any data)
+  3. The user input data from the mission setup is used to set up the mission
+  4. When the user clicks 'next', the mission is initialized (sets up listening for status)
+  5. When user has gone through all the screens, display a 'overview' of the mission selected and their status
+  5a. Prevent user from going forward (completing setup) until all missions have been accepted & READY.
+  */
+
+  /**
+   * Creates a new mission of the speficied type.
+   * For now, we assume the ordering of the missions is correct. (handled by UI driver)
+   *
+   * @param  {string} missionName name of the mission to create, e.g. 'ISRMission'
+   * @returns  {integer} the mission number for later identification. Starts at 0.
+   */
+  createMission(missionName) {
+    const missionConstructor = Orchestrator.missionObjects[missionName];
+    if (missionConstructor === undefined) {
+      Orchestrator.log('In Class `Orchestrator`, method `createMission`: Received request to construct mission object for: ', missionName, ' ; but class is not defined');
+    } else {
+      const newMission = new missionConstructor(this.endMission, this.knownVehicles, Orchestrator);
+      this.scheduledMissions.push(newMission);
+      return this.scheduledMissions.length - 1;
+    }
+    return -1;
+  }
+
+  /**
+   * Attempt to apply the current mission settings.
+   * If successful, it will return true, otherwise it returns a string with
+   * more infomation on the failure.
+   *
+   * @param {integer} missionNumber the number of the mission
+   * @param {Object} missionSettings the options/settings for the current mission
+   * @param {Object} missionVehicles the mapping of vehicles to mission/job strings
+   *
+   * @returns {boolean|string} true   if the mission is valid and ready;
+   *                          String message indicating what went wrong otherwise
+   */
+  applyMissionSetup(missionNumber, missionSettings, missionVehicles) {
+    const missionObj = this.scheduledMissions[missionNumber];
+    if (missionObj === undefined) {
+      Orchestrator.log('In Class `Orchestrator`, method `applyMissionSetup`: Invalid mission number: ', missionNumber);
+      return 'Internal Error: Invalid mission number';
+    } else {
+      try {
+        missionObj.setMissionInfo(missionSettings);
+        missionObj.setVehicleMapping(missionVehicles);
+      } catch (err) {
+        Orchestrator.log('In Class `Orchestrator`, method `applyMissionSetup`: ', err.message, err);
+      }
+      return missionObj.missionSetupComplete();
+    }
+  }
+
   /**
     *   Adds a mission to be executed.
+    *   Initializes the mission and sets up a listener for every time the status
+    *   is updated so that if it enters an invalid state, it can be handled early.
+    *
     *   @TODO: Do ordering on the missions (e.g., quickSearch should be executed before detailedSearch)
     *   @this {Orchestrator}
-    *   @param {Mission} mission: The mission to be added.
+    *   @param {Object} mission The mission to be added and all the data
     */
   addMission(mission) {
+    //
     if (mission instanceof Mission) {
       this.scheduledMissions.push(mission);
     } else {
@@ -84,28 +148,33 @@ export default class Orchestrator {
     }
   }
 
+
   /**
     *   Checks a Mission, then starts it.
     *   @this {Orchestrator}
     *   @param {JSON} requiredData: The data required by the current Mission (the Mission that is to be started).
     */
   startMission(requiredData) {
-    const missionOK = this.scheduledMissions[this.currentMission].check(this.knownVehicles, requiredData);
-    if (missionOK) {
-      this.scheduledMissions[this.currentMission].start();
+    // Assume that the mission is still okay if the status of the mission is READY
+    if (this.scheduledMissions[this.currentMission].status === 'READY') {
+      this.scheduledMissions[this.currentMission].missionStart(requiredData);
     } else {
-      Orchestrator.log(this.currentMissionName(), ' mission could not be started due to a failure in the internal checks!');
+      Orchestrator.log(this.currentMissionName(), ' mission could not be started due because it is not in a READY state!');
     }
   }
 
   /**
-    *   Ends a Mission
+    *   Handles when a Mission ends; forwarding the data to the next mission
+    *   scheduled to start (if present)
     *   @this {Orchestrator}
-    *   @param {JSON} nextRequired: The data required by the next Mission (the next Mission that is to be started).
+    *   @param {Object} nextRequired: The data required by the next Mission (the next Mission that is to be started).
     */
   endMission(nextRequired) {
     this.nextMissionRequiredData = nextRequired;
     this.currentMission++;
+    if (this.scheduledMissions.length < this.currentMission) {
+      this.startMission(nextRequired);
+    }
   }
 
   /**
@@ -114,7 +183,7 @@ export default class Orchestrator {
     *   @returns {string} currentMissionName: the name of the current Mission
     */
   currentMissionName() {
-    return this.scheduledMissions[this.currentMission].getName();
+    return this.scheduledMissions[this.currentMission].name;
   }
 
   /**
