@@ -249,4 +249,13 @@ export default class MessageHandler {
     //
     //
   }
+
+  /**
+    * Sets the active mission for all Mission message to get forwarded to
+    *
+    * @param {Mission} mission the mission object to receive the messages
+    */
+  setActiveMission(mission) {
+    // set the active mission
+  }
 }

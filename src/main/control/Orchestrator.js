@@ -2,7 +2,7 @@ import { ipcRenderer } from 'electron';
 import { Mission } from './Mission';
 import { Vehicle } from './Vehicle';
 import { MessageHandler } from './MessageHandler';
-import { UpdateHandler } from './DataStructures/UpdateHandler';
+import { ISRMission } from './Missions/ISRMission';
 
 export default class Orchestrator {
   static log(failureMessage) {
@@ -22,6 +22,8 @@ export default class Orchestrator {
     */
   constructor(messageHandler) {
     this.scheduledMissions = [];
+    // Store the statuses of each mission; object are in the same order as the scheduledMissions
+    this.scheduledMissionsStatus = [];
     this.currentMission = 0;
     this.nextMissionRequiredData = null;
     this.knownVehicles = [];
@@ -33,7 +35,11 @@ export default class Orchestrator {
       this.messageHandler = messageHandler;
     }
 
-    this.missionObjects = [];
+    // boolean indicator for whether a mission is actively running
+    this.isRunning = false;
+
+    // get the constructors of each mission and put them in order(?)
+    this.missionObjects = [ISRMission.constructor];
   }
 
   /**
@@ -69,6 +75,8 @@ export default class Orchestrator {
     *   @param {Vehicle} vehicle:   The vehicle to deactivate
     */
   deactivateVehicle(vehicle) {
+    // Keep vehicle as a known vehicle, but mark it as inactive so that
+    // if it comes back online it can be disabled
     vehicle.setActive(false);
     vehicle.setAvailable(false);
   }
@@ -91,7 +99,12 @@ export default class Orchestrator {
    * @returns  {integer} the mission number for later identification. Starts at 0.
    */
   createMission(missionName) {
-    const missionConstructor = Orchestrator.missionObjects[missionName];
+    if (this.isRunning) {
+      Orchestrator.log('Cannot create new mission when mission is actively running');
+      return -1;
+    }
+
+    const missionConstructor = this.missionObjects[missionName];
     if (missionConstructor === undefined) {
       Orchestrator.log('In Class `Orchestrator`, method `createMission`: Received request to construct mission object for: ', missionName, ' ; but class is not defined');
     } else {
@@ -112,9 +125,14 @@ export default class Orchestrator {
    * @param {Object} missionVehicles the mapping of vehicles to mission/job strings
    *
    * @returns {boolean|string} true   if the mission is valid and ready;
-   *                          String message indicating what went wrong otherwise
+   *                           String message indicating what went wrong otherwise
    */
   applyMissionSetup(missionNumber, missionSettings, missionVehicles) {
+    if (this.isRunning) {
+      Orchestrator.log('Cannot apply mission setup when mission is actively running');
+      return 'Internal Error: Mission setting applied when mission already running';
+    }
+
     const missionObj = this.scheduledMissions[missionNumber];
     if (missionObj === undefined) {
       Orchestrator.log('In Class `Orchestrator`, method `applyMissionSetup`: Invalid mission number: ', missionNumber);
@@ -138,16 +156,47 @@ export default class Orchestrator {
     *   @TODO: Do ordering on the missions (e.g., quickSearch should be executed before detailedSearch)
     *   @this {Orchestrator}
     *   @param {Object} mission The mission to be added and all the data
+    *   @param {Function} success the callback that is called when the mission status becomes READY
+    *   @param {Function} failure the callback that is called when the mission status enters a non-READY state
     */
-  addMission(mission) {
-    //
+  addMission(mission, success, failure) {
+    if (this.isRunning) {
+      Orchestrator.log('Cannot add mission when a mission is actively running');
+      return;
+    }
+
     if (mission instanceof Mission) {
-      this.scheduledMissions.push(mission);
+      // Get the index of the mission
+      const missionIndex = this.scheduledMissions.push(mission) - 1;
+      this.scheduledMissionsStatus.push(mission.status);
+      mission.listenForStatusUpdates(status => {
+        if (status === 'READY') {
+          success();
+          this.scheduledMissionsStatus[missionIndex] = status;
+        } else {
+          failure();
+          this.scheduledMissionsStatus[missionIndex] = status;
+        }
+        // continue listening to status updates
+        return false;
+      });
     } else {
       Orchestrator.log('In Class `Orchestrator`, method `addMission`: Received an object constructed with: ', mission.constructor.name, ' ; expected object of type `Mission` or subclass');
     }
   }
 
+  /**
+    *   Gets the status for all the scheduled missions
+    *
+    *   @returns {boolean} true if all the scheduled missions are ready
+    */
+  getScheduledMissionsStatues() {
+    let allAreReady = true;
+    for (const status of this.scheduledMissionsStatus) {
+      allAreReady = allAreReady && status === 'READY';
+    }
+    return allAreReady;
+  }
 
   /**
     *   Checks a Mission, then starts it.
@@ -157,8 +206,14 @@ export default class Orchestrator {
   startMission(requiredData) {
     // Assume that the mission is still okay if the status of the mission is READY
     if (this.scheduledMissions[this.currentMission].status === 'READY') {
+      this.isRunning = true;
+      this.messageHandler.setActiveMission(this.scheduledMissions[this.currentMission]);
       this.scheduledMissions[this.currentMission].missionStart(requiredData);
     } else {
+      // Not running anymore because a mission wasnt READY to start
+      this.isRunning = false;
+      this.messageHandler.setActiveMission(null);
+      // either attempt recovery, or just do a reset?
       Orchestrator.log(this.currentMissionName(), ' mission could not be started due because it is not in a READY state!');
     }
   }
@@ -174,7 +229,23 @@ export default class Orchestrator {
     this.currentMission++;
     if (this.scheduledMissions.length < this.currentMission) {
       this.startMission(nextRequired);
+    } else {
+      // End of missions -- reset
+      this.reset();
     }
+  }
+
+  /**
+    * Reset the Orchestrator to initial state so that missions can be
+    * added again.
+    */
+  reset() {
+    this.isRunning = false;
+    this.currentMission = 0;
+    this.scheduledMissions = [];
+    this.scheduledMissionsStatus = [];
+    this.nextMissionRequiredData = null;
+    this.messageHandler.setActiveMission(null);
   }
 
   /**

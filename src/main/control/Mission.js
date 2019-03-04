@@ -276,9 +276,9 @@ export default class Mission {
     this.completionCallback(this.getTerminatedData());
   }
 
-  // +-----------------------------------------------------------------------+
-  // |                        Mission Setup Function                         |
-  // +-----------------------------------------------------------------------+
+  /* ======================================================================== */
+  /*                          Mission Setup Function                          */
+  /* ======================================================================== */
 
   /**
    * Checks to see if the mission is ready for initialization.
