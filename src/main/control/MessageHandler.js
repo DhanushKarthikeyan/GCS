@@ -5,7 +5,7 @@ import { UpdateHandlers } from './DataStructures/UpdateHandler';
 
 /*
 ================================================================================
-MESSAGE BASIC FIELDS
+MESSAGE BASIC FIELDS (work to remove, consult wiki)
 ================================================================================
 {
   id: {int} (currentUnixTime is starting counter (this way old messages cannot be re-used);
@@ -51,10 +51,17 @@ export default class MessageHandler {
     } else {
       this.orchestrator = orchestrator;
     }
+    this.updateHandler = UpdateHandlers();
   }
 
+  /**
+   * @description remove a message with messageID `mID` from the messageOutbox queue
+   * @param {int} mID : ID of message to remove
+   * @param {Array} box : message "box" (queue) to remove message from
+   *
+   * @returns {Array} box : the `box` provided in the function arguments that has message identified by `mID` remove
+   */
   rmMsg(mID, box) {
-    /* remove a message with messageID `mID` from the messageOutbox queue */
     box = box.filter(obj => !(obj.id === mID));
     return box;
   }
@@ -223,6 +230,10 @@ export default class MessageHandler {
     switch (msg.type.toUpperCase()) {
       /* Base messages */
       case 'CONNECT':
+        /**
+         * @TODO messageHandler only (modify orchestrator directly)
+         */
+        recipients.push('GCS');
         break;
       case 'UPDATE':
         recipients.push('vehicle');
@@ -231,6 +242,9 @@ export default class MessageHandler {
         break;
       /* ISR */
       case 'POI':
+        /**
+         * @TODO Mission only (no orchestrator)
+         */
         break;
       /**
        * @TODO Get message types for other missions
@@ -242,12 +256,18 @@ export default class MessageHandler {
     return recipients;
   }
 
+  /**
+   * Schedules* a message to be sent using events in UpdateHandlers
+   * @param {JSON} msg : The message that is to be sent
+   */
   asyncSendMessage(msg) {
-    // Use EventsHandler class to do this
-    // Send all messages in the queue
-    //
-    //
-    //
+    const eventString = `${msg.tid}-${msg.mID}-${msg.type}`;
+
+    /* not sure if this will work */
+    this.updateHandler.addHandler(eventString, () => this.rmMsg(msg.id, this.messageOutbox),
+      () => this.orchestrator.deactivateVehicle(
+        this.orchestrator.getVehicleByID(msg.tid)),
+      3000);
   }
 
   /**

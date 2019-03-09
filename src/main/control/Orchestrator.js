@@ -28,8 +28,8 @@ export default class Orchestrator {
     this.nextMissionRequiredData = null;
     this.knownVehicles = [];
     if ((messageHandler === null) ||
-        (messageHandler === undefined) ||
-        !(messageHandler instanceof MessageHandler)) {
+      (messageHandler === undefined) ||
+      !(messageHandler instanceof MessageHandler)) {
       this.messageHandler = MessageHandler(this);
     } else {
       this.messageHandler = messageHandler;
@@ -52,28 +52,29 @@ export default class Orchestrator {
   }
 
   /**
-    *   Getter for the knownVehicles member variable.
-    *   @this {Orchestrator}
-    *   @returns {list} knownVehicles: The list of known Vehicles.
-    */
+   *  Getter for the knownVehicles member variable.
+   *  @this {Orchestrator}
+   *  @returns {list} knownVehicles: The list of known Vehicles.
+   */
   getKnownVehicles() {
     return this.knownVehicles;
   }
 
   /**
-    *   Adds a vehicle to the known vehicle list.
-    *   @this {Orchestrator}
-    *   @param {Vehicle} vehicle:   The vehicle to add to the list
-    */
+   * Adds a vehicle to the known vehicle list.
+   * @TODO Add isActive polling (i.e., task to check if the Vehicle is disconnected (if there have ben no messages sent w/in the last 3 seconds))
+   * @this {Orchestrator}
+   * @param {Vehicle} vehicle:   The vehicle to add to the list
+   */
   addVehicle(vehicle) {
     this.knownVehicles.push(vehicle);
   }
 
   /**
-    *   Marks a vehicle not active and unavailable for tasking.
-    *   @this {Orchestrator}
-    *   @param {Vehicle} vehicle:   The vehicle to deactivate
-    */
+   *    Marks a vehicle not active and unavailable for tasking.
+   *    @this {Orchestrator}
+   *    @param {Vehicle} vehicle:   The vehicle to deactivate
+   */
   deactivateVehicle(vehicle) {
     // Keep vehicle as a known vehicle, but mark it as inactive so that
     // if it comes back online it can be disabled
@@ -262,7 +263,7 @@ export default class Orchestrator {
    *    @param {int} vID: vehicle ID
    *    @returns {Vehicle} v: non-null on success; null on failure
    */
-  static getVehicleByID(vID) {
+  getVehicleByID(vID) {
     for (const v of this.knownVehicles) {
       if (v.id === vID) {
         return v;
@@ -315,7 +316,7 @@ export default class Orchestrator {
         this.scheduledMissions[this.currentMission].vehicleUpdate();
         break;
       default:
-        Orchestrator.log('Unhandled (bad?) message received from vehicle: ', message.srcVehicleID, '; with contents of :', message);
+        Orchestrator.log(`Unhandled (bad?) message received from vehicle: ${message.srcVehicleID}  with contents of : ${message}`);
         this.sendMessage(message.srcVehicleID, { type: 'badMessage', error: 'Bad message type' });
     }
   }
