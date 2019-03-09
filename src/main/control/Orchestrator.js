@@ -3,6 +3,7 @@ import { Mission } from './Mission';
 import { Vehicle } from './Vehicle';
 import { MessageHandler } from './MessageHandler';
 import { ISRMission } from './Missions/ISRMission';
+import { UpdateHandler } from './DataStructures/UpdateHandler';
 
 export default class Orchestrator {
   static log(failureMessage) {
@@ -40,6 +41,8 @@ export default class Orchestrator {
 
     // get the constructors of each mission and put them in order(?)
     this.missionObjects = [ISRMission.constructor];
+
+    this.vehicleStatusUpdater = UpdateHandler();
   }
 
   /**
@@ -61,12 +64,32 @@ export default class Orchestrator {
   }
 
   /**
+   * Add task to check the last time a given vehicle has checked in
+   * @param {Vehicle} vehicle The Vehicle to check.
+   */
+  pingAgain_f(vehicle) {
+    if ((((vehicle !== undefined) && (vehicle !== null)) && !(vehicle instanceof Vehicle)) || (!vehicle.isActive)) {
+      Orchestrator.log(`Refusing to re-schedule task to check on vehicle with ID: ${vehicle.vehicleId}; is invalid not active`);
+    } else {
+      const delta = Date.now() - vehicle.lastConnTime;
+      if ((delta >= 0) && (delta <= vehicle.vehicleTimeoutLength)) {
+        // Vehicle has connected w/in the last 30 seconds, schedule to ping again at expiring time
+        this.vehicleStatusUpdater.addHandler(vehicle.vehicleId, () => this.pingAgain_f(vehicle), () => this.pingAgain_f(vehicle), delta);
+      } else {
+        // Vehicle has NOT sent ANY message (or none were received), mark vehicle as deactivated
+        this.deactivateVehicle(vehicle);
+      }
+    }
+  }
+
+  /**
    * Adds a vehicle to the known vehicle list.
-   * @TODO Add isActive polling (i.e., task to check if the Vehicle is disconnected (if there have ben no messages sent w/in the last 3 seconds))
+   * @TODO Add isActive polling (i.e., task to check if the Vehicle is disconnected/lost comms/etc.)
    * @this {Orchestrator}
    * @param {Vehicle} vehicle:   The vehicle to add to the list
    */
   addVehicle(vehicle) {
+    this.vehicleStatusUpdater.addHandler(vehicle.vehicleId, () => this.pingAgain_f(vehicle), () => this.pingAgain_f(vehicle), 1000);
     this.knownVehicles.push(vehicle);
   }
 

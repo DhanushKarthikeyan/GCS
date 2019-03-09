@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron';
 
 import { Orchestrator } from './Orchestrator';
-import { UpdateHandlers } from './DataStructures/UpdateHandler';
+import { UpdateHandler } from './DataStructures/UpdateHandler';
 
 /*
 ================================================================================
@@ -51,7 +51,7 @@ export default class MessageHandler {
     } else {
       this.orchestrator = orchestrator;
     }
-    this.updateHandler = UpdateHandlers();
+    this.updateHandler = UpdateHandler();
   }
 
   /**
@@ -204,7 +204,7 @@ export default class MessageHandler {
     this.messagesReceived.push(msg.id);
     this.ack(msg);
     // 3. Handle the message received
-
+    this.orchestrator.getVehicleByID(msg.sid).lastConnTime = Date.now();
     switch (msg.type.toUpperCase()) {
       /* Base messages */
       case 'CONNECT':

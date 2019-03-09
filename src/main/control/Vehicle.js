@@ -44,6 +44,9 @@ export default class Vehicle {
     // Variables & constants
     // Time (in ms) before considering that a vehicle has timed out
     this.vehicleTimeoutLength = 15000;
+    // Last epoch seconds representing last connected time
+    // TODO Ensure this is valid
+    this.lastConnTime = Date.now();
   }
 
   get jobs() {
