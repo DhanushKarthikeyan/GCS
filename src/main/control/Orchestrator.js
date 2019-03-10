@@ -1,40 +1,45 @@
-import { ipcRenderer } from 'electron';
+// import { ipcRenderer } from 'electron';
 import { Mission } from './Mission';
 import { Vehicle } from './Vehicle';
-import { MessageHandler } from './MessageHandler';
+import { instance as MessageHandlerInstance } from './MessageHandler';
 import { ISRMission } from './Missions/ISRMission';
 import { UpdateHandler } from './DataStructures/UpdateHandler';
 
-export default class Orchestrator {
+// Load the vehicle database
+const { VEHICLE_DATABASE } = require('../../resources/vehicles.json');
+
+// Export only the constant global instance -- singleton
+export const instance = new Orchestrator();
+
+class Orchestrator {
   static log(failureMessage) {
     const ipcMessage = {
       type: 'failure',
       message: failureMessage,
     };
     console.log('FAILURE: (in Class `Orchestrator`) ', failureMessage);
-    ipcRenderer.send('post', 'updateMessages', ipcMessage);
+    // ipcRenderer.send('post', 'updateMessages', ipcMessage);
   }
 
   /**
     *   Creates an instance of an Orchestrator
     *   @constructor
-    *   @param {MessageHandler} messageHandler : For message processing
     *   @this {Orchestrator}
     */
-  constructor(messageHandler) {
+  constructor() {
     this.scheduledMissions = [];
     // Store the statuses of each mission; object are in the same order as the scheduledMissions
     this.scheduledMissionsStatus = [];
-    this.currentMission = 0;
+
+    this.currentMission = null;
+    this.currentMissionIndex = 0;
+    this.currentMissionVehicles = null;
     this.nextMissionRequiredData = null;
     this.knownVehicles = [];
-    if ((messageHandler === null) ||
-      (messageHandler === undefined) ||
-      !(messageHandler instanceof MessageHandler)) {
-      this.messageHandler = MessageHandler(this);
-    } else {
-      this.messageHandler = messageHandler;
-    }
+
+    // Get the MessageHandlerInstance & set the orchestrator message handler to this
+    this.messageHandler = MessageHandlerInstance;
+    this.messageHandler.setMessageHandler(this.processMessage.bind(this));
 
     // boolean indicator for whether a mission is actively running
     this.isRunning = false;
@@ -130,9 +135,9 @@ export default class Orchestrator {
 
     const missionConstructor = this.missionObjects[missionName];
     if (missionConstructor === undefined) {
-      Orchestrator.log('In Class `Orchestrator`, method `createMission`: Received request to construct mission object for: ', missionName, ' ; but class is not defined');
+      Orchestrator.log(`In Class 'Orchestrator', method 'createMission': Received request to construct mission object for: ${missionName}; but class is not defined`);
     } else {
-      const newMission = new missionConstructor(this.endMission, this.knownVehicles, Orchestrator);
+      const newMission = new missionConstructor(this.endMission, this.knownVehicles, this);
       this.scheduledMissions.push(newMission);
       return this.scheduledMissions.length - 1;
     }
@@ -159,14 +164,14 @@ export default class Orchestrator {
 
     const missionObj = this.scheduledMissions[missionNumber];
     if (missionObj === undefined) {
-      Orchestrator.log('In Class `Orchestrator`, method `applyMissionSetup`: Invalid mission number: ', missionNumber);
+      Orchestrator.log(`In Class 'Orchestrator', method 'applyMissionSetup': Invalid mission number: ${missionNumber}`);
       return 'Internal Error: Invalid mission number';
     } else {
       try {
         missionObj.setMissionInfo(missionSettings);
         missionObj.setVehicleMapping(missionVehicles);
       } catch (err) {
-        Orchestrator.log('In Class `Orchestrator`, method `applyMissionSetup`: ', err.message, err);
+        Orchestrator.log(`In Class 'Orchestrator', method 'applyMissionSetup': ${err.message} ${err}`);
       }
       return missionObj.missionSetupComplete();
     }
@@ -205,16 +210,16 @@ export default class Orchestrator {
         return false;
       });
     } else {
-      Orchestrator.log('In Class `Orchestrator`, method `addMission`: Received an object constructed with: ', mission.constructor.name, ' ; expected object of type `Mission` or subclass');
+      Orchestrator.log(`In Class 'Orchestrator', method 'addMission': Received an object constructed with: ${mission.constructor.name}; expected object of type 'Mission' or subclass`);
     }
   }
 
   /**
-    *   Gets the status for all the scheduled missions
+    *   Get whether all the missions are ready or not
     *
     *   @returns {boolean} true if all the scheduled missions are ready
     */
-  getScheduledMissionsStatues() {
+  allMissionsAreReady() {
     let allAreReady = true;
     for (const status of this.scheduledMissionsStatus) {
       allAreReady = allAreReady && status === 'READY';
@@ -223,20 +228,21 @@ export default class Orchestrator {
   }
 
   /**
-    *   Checks a Mission, then starts it.
+    *   Checks a Mission for complete data, then starts it.
     *   @this {Orchestrator}
-    *   @param {JSON} requiredData: The data required by the current Mission (the Mission that is to be started).
+    *   @param {JSON} requiredData the data required by the current Mission (the Mission that is to be started).
     */
   startMission(requiredData) {
     // Assume that the mission is still okay if the status of the mission is READY
-    if (this.scheduledMissions[this.currentMission].status === 'READY') {
+    if (this.scheduledMissions[this.currentMissionIndex].status === 'READY') {
       this.isRunning = true;
-      this.messageHandler.setActiveMission(this.scheduledMissions[this.currentMission]);
-      this.scheduledMissions[this.currentMission].missionStart(requiredData);
+      // Update the current running mission
+      this.currentMission = this.scheduledMissions[this.currentMissionIndex];
+      this.currentMission.missionStart(requiredData);
+      this.currentMissionVehicles = this.currentMission.getMissionActiveVehicles();
     } else {
       // Not running anymore because a mission wasnt READY to start
       this.isRunning = false;
-      this.messageHandler.setActiveMission(null);
       // either attempt recovery, or just do a reset?
       Orchestrator.log(this.currentMissionName(), ' mission could not be started due because it is not in a READY state!');
     }
@@ -250,8 +256,8 @@ export default class Orchestrator {
     */
   endMission(nextRequired) {
     this.nextMissionRequiredData = nextRequired;
-    this.currentMission++;
-    if (this.scheduledMissions.length < this.currentMission) {
+    this.currentMissionIndex++;
+    if (this.scheduledMissions.length < this.currentMissionIndex) {
       this.startMission(nextRequired);
     } else {
       // End of missions -- reset
@@ -265,11 +271,12 @@ export default class Orchestrator {
     */
   reset() {
     this.isRunning = false;
-    this.currentMission = 0;
+    this.currentMission = null;
+    this.currentMissionIndex = 0;
+    this.currentMissionVehicles = null;
     this.scheduledMissions = [];
     this.scheduledMissionsStatus = [];
     this.nextMissionRequiredData = null;
-    this.messageHandler.setActiveMission(null);
   }
 
   /**
@@ -278,7 +285,7 @@ export default class Orchestrator {
     *   @returns {string} currentMissionName: the name of the current Mission
     */
   currentMissionName() {
-    return this.scheduledMissions[this.currentMission].name;
+    return this.currentMission.name;
   }
 
   /**
@@ -293,6 +300,67 @@ export default class Orchestrator {
       }
     }
     return null;
+  }
+
+  /**
+   * Processed a message from the MessageHandler.
+   *
+   * @param {Object} message the message being received from the MessageHandler
+   */
+  processMessage(message) {
+    // Look up the vehicle
+    const vehc = this.getVehicleByID(message.sid);
+    const msgStr = message.type.toUpperCase();
+
+    if (msgStr === 'CONNECT') {
+      /*
+        A new vehicle is attempting to connect; create a new vehicle object if
+        and only if ID is found in the Database & an active vehicle has not allocated
+        the ID already.
+        In many cases, the sending vehicle will not have been defined yet.
+      */
+      if (vehc !== undefined && vehc.isActive) {
+        // Do nothing; the vehicle with that ID is already in the system
+        Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received a connection message for VID: ${message.sid}, but a vehicle with the ID is already active`);
+        return;
+      }
+      // remove vehicle from the known vehicle list (if present) to be replaced
+      this.knownVehicles = this.knownVehicles.filter(v => v.id !== message.sid);
+
+      const newVehc = new Vehicle(message.sid, message.jobsAvailable, 'WAITING');
+      this.knownVehicles.push(newVehc);
+      // Send a connection acknowledgment message to the target
+      this.messageHandler.sendMessageTo(message.sid, { type: 'connectionAck' });
+    } else {
+      // Every other message kind requires that the sender is defined -- verify that this is the case
+      if (vehc === undefined || vehc === null) {
+        Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received an update for VID: ${message.sid}, but no vehicle is registered for the ID`);
+        return;
+      } else if (!vehc.isActive) {
+        // Vehicle should be inactive
+        Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received an update message for inactive vehicle with VID: ${message.sid}; sending stop...`);
+        // Send vehicle a stop message
+        this.messageHandler.sendMessageTo(vehc.id, { type: 'stop' });
+        return;
+      }
+
+      if (msgStr === 'UPDATE') {
+        /*
+          Update message are sent directly to the vehicle that it represents.
+        */
+        vehc.vehicleUpdate(message);
+      } else if (msgStr === 'POI' || msgStr === 'COMPLETE') {
+        /*
+          Complete and POI messages are only considered if they are sent from vehicles
+          that are part of an active mission. The message is then sent to the current
+          mission.
+        */
+        if (message.sid in this.currentMissionVehicles) {
+          // Update the current mission that a complete message was received
+          this.scheduledMissions[this.currentMissionIndex].missionUpdate(message);
+        }
+      }
+    }
   }
 
   // //////////////////////////////////////////////////////////////////////////////
@@ -336,7 +404,7 @@ export default class Orchestrator {
         break;
       case 'COMPLETE' || 'complete':
         srcVehicle.setAvailable(true);
-        this.scheduledMissions[this.currentMission].vehicleUpdate();
+        this.scheduledMissions[this.currentMissionIndex].vehicleUpdate();
         break;
       default:
         Orchestrator.log(`Unhandled (bad?) message received from vehicle: ${message.srcVehicleID}  with contents of : ${message}`);

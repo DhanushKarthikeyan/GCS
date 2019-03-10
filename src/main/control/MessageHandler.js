@@ -76,6 +76,10 @@ export default class MessageHandler {
 
   /**
    * @description Logic for sending message
+   *
+   * The provided message object should contain the type and the other custom fields.
+   * The control fields (id/time/sid/tid) are auto populated by the MessageHandler
+   *
    * @param {Vehicle} vehicle: vehicle to target
    * @param {JSON} message: message to send (must be properly formatted)
    * this {MessageHandler} MessageHandler : instance of the MessageHandler
@@ -94,6 +98,7 @@ export default class MessageHandler {
          * @TODO: Finish moving stuff over from Orchestrator.js
          */
       default:
+        // Error: message type not recognized!
         break;
     }
     // Select vehicle

@@ -1,0 +1,18 @@
+{
+  "0": {
+    "name": "GCS",
+    "mac_addresses": []
+  },
+  "100": {
+    "name": "UAV",
+    "mac_addresses": []
+  },
+  "400": {
+    "name": "VTOL 1",
+    "mac_addresses": []
+  },
+  "401": {
+    "name": "VTOL 2",
+    "mac_addresses": []
+  }
+}

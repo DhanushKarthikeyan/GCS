@@ -163,7 +163,7 @@ export default class Mission {
    * @returns {boolean} true if the message was of type complete, false otherwise
    */
   missionUpdate(mesg, sender) {
-    if (mesg.type === 'complete') {
+    if (mesg.type.toUpperCase() === 'COMPLETE') {
       // Get the sending vehicle
       const vehcJob = this.activeVehicleMapping.get(sender);
 
@@ -469,6 +469,24 @@ export default class Mission {
   setStatus(newStatus) {
     this.missionStatus = newStatus;
     this.statusUpdateHandler.event('status', newStatus);
+  }
+
+  /**
+   * Gets the vehicles that are active/used in the current mission
+   *
+   * @returns {Object} object/table of the currently used vehicles with the mapping VID => vehicle object
+   */
+  getMissionActiveVehicles() {
+    // Get array of all the vehicles waiting for a task
+    const activeVehicles = {};
+    for (const vehc in this.waitingVehicles.keys) {
+      activeVehicles[vehc.id] = vehc;
+    }
+    // Add all the vehicles that are currently active & running
+    for (const vehc in this.activeTasks.keys()) {
+      activeVehicles[vehc.id] = vehc;
+    }
+    return activeVehicles;
   }
 
   /**
