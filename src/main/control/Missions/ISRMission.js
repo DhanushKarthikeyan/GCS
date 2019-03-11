@@ -36,4 +36,8 @@ export default class ISRMission extends Mission {
   getTerminatedData() {
     return this.missionDataResults;
   }
+
+  get name() {
+    return 'ISRMission';
+  }
 }

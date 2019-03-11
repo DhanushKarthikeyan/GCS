@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron';
 
-import { Orchestrator } from './Orchestrator';
-import { UpdateHandler } from './DataStructures/UpdateHandler';
+import Orchestrator from './Orchestrator';
+import UpdateHandler from './DataStructures/UpdateHandler';
 
 /*
 ================================================================================
@@ -29,12 +29,31 @@ export default class MessageHandler {
   }
 
   /**
+   * Get the instance of the singleton Message Handler.
+   *
+   * @returns {MessageHandler} the singleton instance
+   */
+  static getInstance() {
+    if (MessageHandler.instance === undefined) {
+      MessageHandler.singletonUnlock = true;
+      MessageHandler.instance = new MessageHandler();
+      MessageHandler.singletonUnlock = false;
+    }
+    return MessageHandler.instance;
+  }
+
+  /**
    * Creates an instance of a MessageHandler
    * @constructor
    * @param { Orchestrator } orchestrator : the Orchestrator object
    * @this { MessageHandler }
    */
-  constructor(orchestrator) {
+  constructor() {
+    if (MessageHandler.singletonUnlock !== true) {
+      throw new Error('MessageHandler must be acquired with the getInstance() method!');
+    }
+
+
     /* List of JSON obj., ea. repr. 1 msg. */
     this.messageOutbox = [];
     /* List of JSON obj., ea. {ID: , type: } */
@@ -43,15 +62,8 @@ export default class MessageHandler {
     this.messagesReceived = [];
     // this.messageIDSeed = Math.floor(Date.now() / 1000);
     this.messageIDSeed = Date.now();
-    /* Orchestrator */
-    if ((orchestrator === null) ||
-        (orchestrator === undefined) ||
-        !(orchestrator instanceof Orchestrator)) {
-      this.orchestrator = Orchestrator(this);
-    } else {
-      this.orchestrator = orchestrator;
-    }
-    this.updateHandler = UpdateHandler();
+
+    this.updateHandler = new UpdateHandler();
   }
 
   /**
@@ -206,10 +218,12 @@ export default class MessageHandler {
     // If so, drop the message and stop processing
     // Otherwise:
     // 0. record messageID in messagesReceived
+    const orchestrator = Orchestrator.getInstance();
+
     this.messagesReceived.push(msg.id);
     this.ack(msg);
     // 3. Handle the message received
-    this.orchestrator.getVehicleByID(msg.sid).lastConnTime = Date.now();
+    orchestrator.getVehicleByID(msg.sid).lastConnTime = Date.now();
     switch (msg.type.toUpperCase()) {
       /* Base messages */
       case 'CONNECT':
@@ -267,20 +281,22 @@ export default class MessageHandler {
    */
   asyncSendMessage(msg) {
     const eventString = `${msg.tid}-${msg.mID}-${msg.type}`;
+    const orchestrator = Orchestrator.getInstance();
 
     /* not sure if this will work */
     this.updateHandler.addHandler(eventString, () => this.rmMsg(msg.id, this.messageOutbox),
-      () => this.orchestrator.deactivateVehicle(
-        this.orchestrator.getVehicleByID(msg.tid)),
+      () => orchestrator.deactivateVehicle(
+        orchestrator.getVehicleByID(msg.tid)),
       3000);
   }
 
   /**
-    * Sets the active mission for all Mission message to get forwarded to
+    * Sets the function that takes any incoming messages that need to be handled
+    * This is usually a function inside the Orchestrator
     *
-    * @param {Mission} mission the mission object to receive the messages
+    * @param {Function} callback the function to call back
     */
-  setActiveMission(mission) {
+  setMessageHandler(callback) {
     // set the active mission
   }
 }

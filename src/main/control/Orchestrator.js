@@ -1,17 +1,14 @@
 // import { ipcRenderer } from 'electron';
-import { Mission } from './Mission';
-import { Vehicle } from './Vehicle';
-import { instance as MessageHandlerInstance } from './MessageHandler';
-import { ISRMission } from './Missions/ISRMission';
-import { UpdateHandler } from './DataStructures/UpdateHandler';
+import Mission from './Mission';
+import Vehicle from './Vehicle';
+import MessageHandler from './MessageHandler';
+import ISRMission from './Missions/ISRMission';
+import UpdateHandler from './DataStructures/UpdateHandler';
 
 // Load the vehicle database
-const { VEHICLE_DATABASE } = require('../../resources/vehicles.json');
+const { VEHICLE_DATABASE } = require('../../../resources/vehicles.json');
 
-// Export only the constant global instance -- singleton
-export const instance = new Orchestrator();
-
-class Orchestrator {
+export default class Orchestrator {
   static log(failureMessage) {
     const ipcMessage = {
       type: 'failure',
@@ -22,11 +19,29 @@ class Orchestrator {
   }
 
   /**
+   * Get the instance of the singleton Orchestrator.
+   *
+   * @returns {Orchestrator} the singleton instance
+   */
+  static getInstance() {
+    if (Orchestrator.instance === undefined) {
+      Orchestrator.singletonUnlock = true;
+      Orchestrator.instance = new Orchestrator();
+      Orchestrator.singletonUnlock = false;
+    }
+    return Orchestrator.instance;
+  }
+
+  /**
     *   Creates an instance of an Orchestrator
     *   @constructor
     *   @this {Orchestrator}
     */
   constructor() {
+    if (Orchestrator.singletonUnlock !== true) {
+      throw new Error('Orchestrator must be acquired with the getInstance() method!');
+    }
+
     this.scheduledMissions = [];
     // Store the statuses of each mission; object are in the same order as the scheduledMissions
     this.scheduledMissionsStatus = [];
@@ -38,16 +53,15 @@ class Orchestrator {
     this.knownVehicles = [];
 
     // Get the MessageHandlerInstance & set the orchestrator message handler to this
-    this.messageHandler = MessageHandlerInstance;
-    this.messageHandler.setMessageHandler(this.processMessage.bind(this));
+    MessageHandler.getInstance().setMessageHandler(this.processMessage.bind(this));
 
     // boolean indicator for whether a mission is actively running
     this.isRunning = false;
 
     // get the constructors of each mission and put them in order(?)
-    this.missionObjects = [ISRMission.constructor];
+    this.missionObjects = { ISRMission: ISRMission };
 
-    this.vehicleStatusUpdater = UpdateHandler();
+    this.vehicleStatusUpdater = new UpdateHandler();
   }
 
   /**
@@ -121,27 +135,24 @@ class Orchestrator {
   */
 
   /**
-   * Creates a new mission of the speficied type.
-   * For now, we assume the ordering of the missions is correct. (handled by UI driver)
+   * Creates & returns a new mission object of the speicfied type.
    *
    * @param  {string} missionName name of the mission to create, e.g. 'ISRMission'
-   * @returns  {integer} the mission number for later identification. Starts at 0.
+   * @returns  {Mission} the mission number for later identification. Starts at 0.
    */
   createMission(missionName) {
     if (this.isRunning) {
       Orchestrator.log('Cannot create new mission when mission is actively running');
-      return -1;
+      return null;
     }
 
     const missionConstructor = this.missionObjects[missionName];
     if (missionConstructor === undefined) {
       Orchestrator.log(`In Class 'Orchestrator', method 'createMission': Received request to construct mission object for: ${missionName}; but class is not defined`);
+      return null;
     } else {
-      const newMission = new missionConstructor(this.endMission, this.knownVehicles, this);
-      this.scheduledMissions.push(newMission);
-      return this.scheduledMissions.length - 1;
+      return new missionConstructor(this.endMission.bind(this), this.knownVehicles, this);
     }
-    return -1;
   }
 
   /**
@@ -156,7 +167,10 @@ class Orchestrator {
    * @returns {boolean|string} true   if the mission is valid and ready;
    *                           String message indicating what went wrong otherwise
    */
-  applyMissionSetup(missionNumber, missionSettings, missionVehicles) {
+  /* ======================================================================== */
+  /* |               MOVING THIS FUNCTION OUT OF ORCHESTRATOR               | */
+  /* ======================================================================== */
+  applyMissionSetupDONTCALL(missionNumber, missionSettings, missionVehicles) {
     if (this.isRunning) {
       Orchestrator.log('Cannot apply mission setup when mission is actively running');
       return 'Internal Error: Mission setting applied when mission already running';
@@ -182,35 +196,48 @@ class Orchestrator {
     *   Initializes the mission and sets up a listener for every time the status
     *   is updated so that if it enters an invalid state, it can be handled early.
     *
+    *   Should be called from the UI Driver
+    *
     *   @TODO: Do ordering on the missions (e.g., quickSearch should be executed before detailedSearch)
     *   @this {Orchestrator}
-    *   @param {Object} mission The mission to be added and all the data
-    *   @param {Function} success the callback that is called when the mission status becomes READY
-    *   @param {Function} failure the callback that is called when the mission status enters a non-READY state
+    *   @param {Array} missions list of all the missions to be added; the missions should be already set up
     */
-  addMission(mission, success, failure) {
+  addMissions(missions) {
     if (this.isRunning) {
-      Orchestrator.log('Cannot add mission when a mission is actively running');
+      Orchestrator.log('In Class \'Orchestrator\', method \'addMissions\':Cannot add missions when a mission is actively running');
       return;
     }
 
-    if (mission instanceof Mission) {
-      // Get the index of the mission
+    for (let i = 0; i < missions.length; i++) {
+      const mission = missions[i];
+
+      if (!(mission instanceof Mission)) {
+        Orchestrator.log(`In Class 'Orchestrator', method 'addMissions': Received an object constructed with: ${mission.constructor.name}; expected object of type 'Mission' or subclass. Aborting...`);
+        // reset!
+        this.reset();
+        return;
+      }
+
+      if (mission.missionSetupComplete() !== true) {
+        Orchestrator.log(`In Class 'Orchestrator', method 'addMissions': The mission: ${mission.constructor.name} is expected to be completely set up prior to adding. Aborting...`);
+        // reset!
+        this.reset();
+        return;
+      }
+
       const missionIndex = this.scheduledMissions.push(mission) - 1;
       this.scheduledMissionsStatus.push(mission.status);
       mission.listenForStatusUpdates(status => {
         if (status === 'READY') {
-          success();
+          // TODO: add logic for when becomes ready
           this.scheduledMissionsStatus[missionIndex] = status;
         } else {
-          failure();
+          // TODO: add logic for when becomes not ready
           this.scheduledMissionsStatus[missionIndex] = status;
         }
         // continue listening to status updates
         return false;
       });
-    } else {
-      Orchestrator.log(`In Class 'Orchestrator', method 'addMission': Received an object constructed with: ${mission.constructor.name}; expected object of type 'Mission' or subclass`);
     }
   }
 
@@ -311,6 +338,7 @@ class Orchestrator {
     // Look up the vehicle
     const vehc = this.getVehicleByID(message.sid);
     const msgStr = message.type.toUpperCase();
+    const messageHandler = MessageHandler.getInstance();
 
     if (msgStr === 'CONNECT') {
       /*
@@ -330,7 +358,7 @@ class Orchestrator {
       const newVehc = new Vehicle(message.sid, message.jobsAvailable, 'WAITING');
       this.knownVehicles.push(newVehc);
       // Send a connection acknowledgment message to the target
-      this.messageHandler.sendMessageTo(message.sid, { type: 'connectionAck' });
+      messageHandler.sendMessageTo(message.sid, { type: 'connectionAck' });
     } else {
       // Every other message kind requires that the sender is defined -- verify that this is the case
       if (vehc === undefined || vehc === null) {
@@ -340,7 +368,7 @@ class Orchestrator {
         // Vehicle should be inactive
         Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received an update message for inactive vehicle with VID: ${message.sid}; sending stop...`);
         // Send vehicle a stop message
-        this.messageHandler.sendMessageTo(vehc.id, { type: 'stop' });
+        messageHandler.sendMessageTo(vehc.id, { type: 'stop' });
         return;
       }
 
