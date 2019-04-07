@@ -227,14 +227,14 @@ export default class Mission {
 
         if (this.pendingInitializingVehicles.length === 0) {
           // Mission is ready (done initializing)
-          this.logger.log('Mission initialization successful');
+          this.logger.logInfo('Mission initialization successful');
           this.setStatus('READY');
         }
       }, () => {
-        this.logger.log(`Mission initialization timed out while waiting for the vehicle '${vehc}' to initialize`);
+        this.logger.logError(`Mission initialization timed out while waiting for the vehicle '${vehc}' to initialize`);
         this.status('WAITING');
       }, mesg => {
-        this.logger.log(`'${vehc}' entered an ERROR state: ${mesg}`);
+        this.logger.logError(`'${vehc}' entered an ERROR state: ${mesg}`);
         this.handleUnresponsiveVehicle(vehc);
       });
     }
@@ -367,7 +367,7 @@ export default class Mission {
       this.activeVehicleMapping = mapping;
     } else {
       // Report to user (this is a temporary measure) that mapping was invalid
-      this.logger.log('Invalid mapping was given');
+      this.logger.logError('Invalid mapping was given');
     }
   }
 

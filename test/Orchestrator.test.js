@@ -15,22 +15,33 @@ import Orchestrator from '../src/main/control/Orchestrator';
 import ISRMission from '../src/main/control/Missions/ISRMission';
 import Vehicle from '../src/main/control/Vehicle';
 
-function createNewOrchestrator() {
-  Orchestrator.instance = undefined;
-  return Orchestrator.getInstance();
-}
 
 // Override log
 // TODO: because static, change to before/after reverts to original
 let logged_message;
-Orchestrator.log = str => { logged_message = str; };
+
+const dummyLogger = {
+  logError: message => { logged_message = message; },
+  logInfo: message => { logged_message = message; },
+};
+
+function createNewDummyOrchestrator() {
+  Orchestrator.instance = undefined;
+  const orchRef = Orchestrator.getInstance();
+
+  // Mute the loggers
+  orchRef.logError = dummyLogger.logError;
+  orchRef.logInfo = dummyLogger.logInfo;
+
+  return orchRef;
+}
 
 describe('Orchestrator', () => {
   describe('+ createMission()', () => {
     let orchestrator;
 
     it('should create a single new mission object', () => {
-      orchestrator = createNewOrchestrator();
+      orchestrator = createNewDummyOrchestrator();
 
       const mission = orchestrator.createMission('ISRMission');
       chai.expect(orchestrator.scheduledMissions.length).to.equal(0);
@@ -39,7 +50,7 @@ describe('Orchestrator', () => {
     });
 
     it('should return null and log an error if an invalid request is made', () => {
-      orchestrator = createNewOrchestrator();
+      orchestrator = createNewDummyOrchestrator();
 
       const mission = orchestrator.createMission('FAKE_MISSION');
       chai.expect(mission).to.be.null;
@@ -52,8 +63,26 @@ describe('Orchestrator', () => {
   describe('+ addMissions()', () => {
     let orchestrator;
 
-    it('should create a single new mission object', () => {
-      orchestrator = createNewOrchestrator();
+    it('should add a single mission to the scheduled missions list in the orchestrator', () => {
+      orchestrator = createNewDummyOrchestrator();
+
+      // Create and set up the mission
+      const mission = orchestrator.createMission('ISRMission');
+
+      const missionSetup = { plane_end_action: 'land', plane_start_action: 'takeoff' };
+      const vh1 = new Vehicle(1, ['ISR_Plane'], 'WAITING');
+      const mapping = new Map([[vh1, 'ISR_Plane']]);
+
+      mission.setVehicleMapping(mapping);
+      mission.setMissionInfo(missionSetup);
+
+      // Check that the mission setup is complete
+      chai.expect(mission.missionSetupComplete(), 'The mission setup did not complete successfully!').to.be.true;
+
+      orchestrator.addMissions([mission]);
+
+      chai.expect(orchestrator.scheduledMissions.length).to.equal(1);
+      chai.expect(orchestrator.scheduledMissionsStatus.length).to.equal(1);
     });
   });
 
@@ -62,7 +91,7 @@ describe('Orchestrator', () => {
 
 
     it('should indicate if all the missions are ready to start', () => {
-      orchestrator = createNewOrchestrator();
+      orchestrator = createNewDummyOrchestrator();
 
       let mission1, mission2;
 
@@ -86,7 +115,7 @@ describe('Orchestrator', () => {
     let orchestrator;
 
     beforeEach(() => {
-      orchestrator = createNewOrchestrator();
+      orchestrator = createNewDummyOrchestrator();
     });
 
     it('should process incoming "CONNECT" messages', () => {
@@ -187,7 +216,7 @@ describe('Orchestrator', () => {
     let orchestrator, mission1, mission2, vehc1, vehc2;
 
     beforeEach(() => {
-      orchestrator = createNewOrchestrator();
+      orchestrator = createNewDummyOrchestrator();
 
       // connect the two new vehicles (Connect message)
       const connectMessage1 = { type: 'CONNECT', sid: 100, jobsAvailable: ['ISR_Plane'] };

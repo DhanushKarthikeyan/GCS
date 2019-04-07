@@ -33,7 +33,8 @@ function dummyCompletionCallback() {
  * Define a dummy logger object so that no logging output is created
  */
 const dummyLogger = {
-  log: () => {},
+  logError: () => {},
+  logInfo: () => {},
 };
 
 describe('ISRMission', () => {

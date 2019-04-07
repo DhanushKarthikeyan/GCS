@@ -9,15 +9,6 @@ import UpdateHandler from './DataStructures/UpdateHandler';
 const { VEHICLE_DATABASE } = require('../../../resources/vehicles.json');
 
 export default class Orchestrator {
-  static log(failureMessage) {
-    const ipcMessage = {
-      type: 'failure',
-      message: failureMessage,
-    };
-    console.log('FAILURE: (in Class `Orchestrator`) ', failureMessage);
-    // ipcRenderer.send('post', 'updateMessages', ipcMessage);
-  }
-
   /**
    * Get the instance of the singleton Orchestrator.
    *
@@ -65,6 +56,22 @@ export default class Orchestrator {
   }
 
   /**
+   *  Logger method for the Orchestrator
+   *  @param {string} message the message
+   */
+  logInfo(message) {
+    console.log(`[INFO] '${message}'`);
+  }
+
+  /**
+   *  Logger method for the Orchestrator
+   *  @param {string} message the message
+   */
+  logError(message) {
+    console.log(`[ERROR] '${message}'`);
+  }
+
+  /**
     *   Getter for the scheduledMissions member variable.
     *   @this {Orchestrator}
     *   @returns {list} scheduledMissions: The list of scheduled Missions
@@ -88,7 +95,7 @@ export default class Orchestrator {
    */
   pingAgain_f(vehicle) {
     if ((((vehicle !== undefined) && (vehicle !== null)) && !(vehicle instanceof Vehicle)) || (!vehicle.isActive)) {
-      Orchestrator.log(`Refusing to re-schedule task to check on vehicle with ID: ${vehicle.vehicleId}; is invalid not active`);
+      this.logError(`Refusing to re-schedule task to check on vehicle with ID: ${vehicle.vehicleId}; is invalid not active`);
     } else {
       const delta = Date.now() - vehicle.lastConnTime;
       if ((delta >= 0) && (delta <= vehicle.vehicleTimeoutLength)) {
@@ -141,14 +148,9 @@ export default class Orchestrator {
    * @returns  {Mission} the mission number for later identification. Starts at 0.
    */
   createMission(missionName) {
-    if (this.isRunning) {
-      Orchestrator.log('Cannot create new mission when mission is actively running');
-      return null;
-    }
-
     const missionConstructor = this.missionObjects[missionName];
     if (missionConstructor === undefined) {
-      Orchestrator.log(`In Class 'Orchestrator', method 'createMission': Received request to construct mission object for: ${missionName}; but class is not defined`);
+      this.logError(`In Class 'Orchestrator', method 'createMission': Received request to construct mission object for: ${missionName}; but class is not defined`);
       return null;
     } else {
       return new missionConstructor(this.endMission.bind(this), this.knownVehicles, this);
@@ -172,20 +174,20 @@ export default class Orchestrator {
   /* ======================================================================== */
   applyMissionSetupDONTCALL(missionNumber, missionSettings, missionVehicles) {
     if (this.isRunning) {
-      Orchestrator.log('Cannot apply mission setup when mission is actively running');
+      this.logError('Cannot apply mission setup when mission is actively running');
       return 'Internal Error: Mission setting applied when mission already running';
     }
 
     const missionObj = this.scheduledMissions[missionNumber];
     if (missionObj === undefined) {
-      Orchestrator.log(`In Class 'Orchestrator', method 'applyMissionSetup': Invalid mission number: ${missionNumber}`);
+      this.logError(`In Class 'Orchestrator', method 'applyMissionSetup': Invalid mission number: ${missionNumber}`);
       return 'Internal Error: Invalid mission number';
     } else {
       try {
         missionObj.setMissionInfo(missionSettings);
         missionObj.setVehicleMapping(missionVehicles);
       } catch (err) {
-        Orchestrator.log(`In Class 'Orchestrator', method 'applyMissionSetup': ${err.message} ${err}`);
+        this.logError(`In Class 'Orchestrator', method 'applyMissionSetup': ${err.message} ${err}`);
       }
       return missionObj.missionSetupComplete();
     }
@@ -204,7 +206,7 @@ export default class Orchestrator {
     */
   addMissions(missions) {
     if (this.isRunning) {
-      Orchestrator.log('In Class \'Orchestrator\', method \'addMissions\':Cannot add missions when a mission is actively running');
+      this.logError('In Class \'Orchestrator\', method \'addMissions\':Cannot add missions when a mission is actively running');
       return;
     }
 
@@ -212,14 +214,14 @@ export default class Orchestrator {
       const mission = missions[i];
 
       if (!(mission instanceof Mission)) {
-        Orchestrator.log(`In Class 'Orchestrator', method 'addMissions': Received an object constructed with: ${mission.constructor.name}; expected object of type 'Mission' or subclass. Aborting...`);
+        this.logError(`In Class 'Orchestrator', method 'addMissions': Received an object constructed with: ${mission.constructor.name}; expected object of type 'Mission' or subclass. Aborting...`);
         // reset!
         this.reset();
         return;
       }
 
       if (mission.missionSetupComplete() !== true) {
-        Orchestrator.log(`In Class 'Orchestrator', method 'addMissions': The mission: ${mission.constructor.name} is expected to be completely set up prior to adding. Aborting...`);
+        this.logError(`In Class 'Orchestrator', method 'addMissions': The mission: ${mission.constructor.name} is expected to be completely set up prior to adding. Aborting...`);
         // reset!
         this.reset();
         return;
@@ -271,7 +273,7 @@ export default class Orchestrator {
       // Not running anymore because a mission wasnt READY to start
       this.isRunning = false;
       // either attempt recovery, or just do a reset?
-      Orchestrator.log(this.currentMissionName(), ' mission could not be started due because it is not in a READY state!');
+      this.logError(this.currentMissionName(), ' mission could not be started due because it is not in a READY state!');
     }
   }
 
@@ -349,7 +351,7 @@ export default class Orchestrator {
       */
       if (vehc !== null && vehc.isActive) {
         // Do nothing; the vehicle with that ID is already in the system
-        Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received a connection message for VID: ${message.sid}, but a vehicle with the ID is already active`);
+        this.logError(`In Class 'Orchestrator', method 'processMessage': Received a connection message for VID: ${message.sid}, but a vehicle with the ID is already active`);
         return;
       }
       // remove vehicle from the known vehicle list (if present) to be replaced
@@ -438,7 +440,7 @@ export default class Orchestrator {
         this.scheduledMissions[this.currentMissionIndex].vehicleUpdate();
         break;
       default:
-        Orchestrator.log(`Unhandled (bad?) message received from vehicle: ${message.srcVehicleID}  with contents of : ${message}`);
+        this.logError(`Unhandled (bad?) message received from vehicle: ${message.srcVehicleID}  with contents of : ${message}`);
         this.sendMessage(message.srcVehicleID, { type: 'badMessage', error: 'Bad message type' });
     }
   }
