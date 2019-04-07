@@ -21,6 +21,8 @@ export default class Vehicle {
     this.errorMessage = '';
     this.errorHandler = () => {};
 
+    this.isActive = true;
+
     // Event update handler object
     this.updateEventHandlers = new UpdateHandler();
 
@@ -37,7 +39,7 @@ export default class Vehicle {
       this.lat = value;
     });
 
-    this.updateEventHandlers.addHandler('lat', value => {
+    this.updateEventHandlers.addHandler('lng', value => {
       this.lng = value;
     });
 

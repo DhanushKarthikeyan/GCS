@@ -347,7 +347,7 @@ export default class Orchestrator {
         the ID already.
         In many cases, the sending vehicle will not have been defined yet.
       */
-      if (vehc !== undefined && vehc.isActive) {
+      if (vehc !== null && vehc.isActive) {
         // Do nothing; the vehicle with that ID is already in the system
         Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received a connection message for VID: ${message.sid}, but a vehicle with the ID is already active`);
         return;
@@ -359,14 +359,17 @@ export default class Orchestrator {
       this.knownVehicles.push(newVehc);
       // Send a connection acknowledgment message to the target
       messageHandler.sendMessageTo(message.sid, { type: 'connectionAck' });
+      /*
+        end of CONNECT message handling
+       */
     } else {
       // Every other message kind requires that the sender is defined -- verify that this is the case
-      if (vehc === undefined || vehc === null) {
+      if (vehc === null) {
         Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received an update for VID: ${message.sid}, but no vehicle is registered for the ID`);
         return;
       } else if (!vehc.isActive) {
-        // Vehicle should be inactive
-        Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received an update message for inactive vehicle with VID: ${message.sid}; sending stop...`);
+        // Vehicle should be inactive (declared dead)
+        Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received a message from inactive vehicle with VID: ${message.sid}; sending stop...`);
         // Send vehicle a stop message
         messageHandler.sendMessageTo(vehc.id, { type: 'stop' });
         return;
