@@ -53,6 +53,7 @@ export default class Orchestrator {
     this.missionObjects = { ISRMission: ISRMission };
 
     this.vehicleStatusUpdater = new UpdateHandler();
+    this.registeredListeners = [];
   }
 
   /**
@@ -213,6 +214,7 @@ export default class Orchestrator {
     for (let i = 0; i < missions.length; i++) {
       const mission = missions[i];
 
+      // Check that the object was an instance of a Mission object -- reject otherwise
       if (!(mission instanceof Mission)) {
         this.logError(`In Class 'Orchestrator', method 'addMissions': Received an object constructed with: ${mission.constructor.name}; expected object of type 'Mission' or subclass. Aborting...`);
         // reset!
@@ -220,6 +222,7 @@ export default class Orchestrator {
         return;
       }
 
+      // Check that the mission object was fully initialized -- reject & reset otherwise
       if (mission.missionSetupComplete() !== true) {
         this.logError(`In Class 'Orchestrator', method 'addMissions': The mission: ${mission.constructor.name} is expected to be completely set up prior to adding. Aborting...`);
         // reset!
@@ -227,9 +230,11 @@ export default class Orchestrator {
         return;
       }
 
+      // Add a listener for the mission for the future
       const missionIndex = this.scheduledMissions.push(mission) - 1;
       this.scheduledMissionsStatus.push(mission.status);
-      mission.listenForStatusUpdates(status => {
+
+      const listenerObj = mission.listenForStatusUpdates(status => {
         if (status === 'READY') {
           // TODO: add logic for when becomes ready
           this.scheduledMissionsStatus[missionIndex] = status;
@@ -240,6 +245,10 @@ export default class Orchestrator {
         // continue listening to status updates
         return false;
       });
+      this.registeredListeners.push(listenerObj);
+
+      // begin the initialization of the mission; listener will update the statues
+      mission.missionInit();
     }
   }
 
@@ -258,6 +267,10 @@ export default class Orchestrator {
 
   /**
     *   Checks a Mission for complete data, then starts it.
+    *   Note that the startMission does not REQUIRE that all the missions are ready; it just
+    *   requires that the NEXT mission in the schedule is ready. This is to allow for some missions
+    *   to initialize later.
+    *
     *   @this {Orchestrator}
     *   @param {JSON} requiredData the data required by the current Mission (the Mission that is to be started).
     */
@@ -280,6 +293,7 @@ export default class Orchestrator {
   /**
     *   Handles when a Mission ends; forwarding the data to the next mission
     *   scheduled to start (if present)
+    *
     *   @this {Orchestrator}
     *   @param {Object} nextRequired: The data required by the next Mission (the next Mission that is to be started).
     */
@@ -299,12 +313,16 @@ export default class Orchestrator {
     * added again.
     */
   reset() {
+    for (const listener in this.registeredListeners) {
+      listener.removeHandler();
+    }
     this.isRunning = false;
     this.currentMission = null;
     this.currentMissionIndex = 0;
     this.currentMissionVehicles = null;
     this.scheduledMissions = [];
     this.scheduledMissionsStatus = [];
+    this.registeredListeners = [];
     this.nextMissionRequiredData = null;
   }
 
@@ -354,11 +372,21 @@ export default class Orchestrator {
         this.logError(`In Class 'Orchestrator', method 'processMessage': Received a connection message for VID: ${message.sid}, but a vehicle with the ID is already active`);
         return;
       }
-      // remove vehicle from the known vehicle list (if present) to be replaced
-      this.knownVehicles = this.knownVehicles.filter(v => v.id !== message.sid);
-
       const newVehc = new Vehicle(message.sid, message.jobsAvailable, 'WAITING');
-      this.knownVehicles.push(newVehc);
+
+      let isNewVehicle = true;
+      // remove vehicle from the known vehicle list (if present) to be replaced
+      for (let i = 0; i < this.knownVehicles.length; i++) {
+        if (this.knownVehicles[i].id === newVehc.id) {
+          this.knownVehicles[i] = newVehc;
+          isNewVehicle = false;
+          break;
+        }
+      }
+      if (isNewVehicle) {
+        this.knownVehicles.push(newVehc);
+      }
+
       // Send a connection acknowledgment message to the target
       messageHandler.sendMessageTo(message.sid, { type: 'connectionAck' });
       /*
@@ -367,11 +395,11 @@ export default class Orchestrator {
     } else {
       // Every other message kind requires that the sender is defined -- verify that this is the case
       if (vehc === null) {
-        Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received an update for VID: ${message.sid}, but no vehicle is registered for the ID`);
+        this.logError(`In Class 'Orchestrator', method 'processMessage': Received an update for VID: ${message.sid}, but no vehicle is registered for the ID`);
         return;
       } else if (!vehc.isActive) {
         // Vehicle should be inactive (declared dead)
-        Orchestrator.log(`In Class 'Orchestrator', method 'processMessage': Received a message from inactive vehicle with VID: ${message.sid}; sending stop...`);
+        this.logError(`In Class 'Orchestrator', method 'processMessage': Received a message from inactive vehicle with VID: ${message.sid}; sending stop...`);
         // Send vehicle a stop message
         messageHandler.sendMessageTo(vehc.id, { type: 'stop' });
         return;

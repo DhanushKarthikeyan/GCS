@@ -3,6 +3,9 @@
  */
 
 const chai = require('chai');
+const chap = require('chai-as-promised');
+
+chai.use(chap);
 
 const mocha = require('mocha');
 const describe = mocha.describe;
@@ -336,17 +339,34 @@ describe('UpdateHandler', () => {
       chai.expect(counter_status).to.equal(1);
       chai.expect(counter_location).to.equal(1);
 
-      handler.removeHandler('status', status_handler);
+      status_handler.removeHandler();
       handler.events({ status: 1, location: 1 });
 
       chai.expect(counter_status).to.equal(1);
       chai.expect(counter_location).to.equal(2);
 
-      handler.removeHandler('location', location_handler);
+      location_handler.removeHandler();
       handler.events({ status: 1, location: 1 });
 
       chai.expect(counter_status).to.equal(1);
       chai.expect(counter_location).to.equal(2);
+    });
+
+    it('should remove the handler and deregister the timeout', () => {
+      handler = new UpdateHandler();
+
+      // the promise should never run
+      return chai.expect(new Promise((resolve, reject) => {
+        const handler_obj = handler.addHandler('status', v => {
+          reject(new Error('Promise should not execute!'));
+        }, () => {
+          reject(new Error('Promise should not execute!'));
+        }, 25);
+
+        handler_obj.removeHandler();
+
+        setTimeout(() => resolve(), 30);
+      })).to.eventually.be.fulfilled;
     });
   });
 });

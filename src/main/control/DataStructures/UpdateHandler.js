@@ -32,7 +32,19 @@ export default class UpdateHandler {
       this.event_dict[event_str] = [];
     }
 
-    const event_obj = { handler: handler_f, expiry: null };
+    // Create the event object. Contains info & function required to remove the handler
+    const event_obj = {
+      handler: handler_f,
+      expiry: null,
+      removeHandler: () => {
+        // add a function that allows the removal of the listener
+        if (event_obj.expiry !== null) {
+          clearTimeout(event_obj.expiry);
+        }
+        this.event_dict[event_str] = this.event_dict[event_str].filter(v => v !== event_obj);
+      },
+    };
+
 
     if (timeout_f !== undefined && timeout_time !== undefined) {
       event_obj.expiry = setTimeout(() => {
@@ -96,7 +108,8 @@ export default class UpdateHandler {
    * @param {Object} event_obj the event object
    */
   removeHandler(event_str, event_obj) {
-    if (this.event_dict[event_str].exipry !== null) {
+    console.warn('remove handler function is deprectated; use the remove handler directly on the object');
+    if (this.event_dict[event_str].expiry !== null) {
       clearTimeout(this.event_dict[event_str].expiry);
     }
     this.event_dict[event_str] = this.event_dict[event_str].filter(v => v !== event_obj);
