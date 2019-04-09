@@ -617,4 +617,62 @@ describe('ISRMission', () => {
       mission.missionStart(missionData);
     });
   });
+
+  describe('+ getTerminatedData()', () => {
+    let vh1;
+    let vh2;
+    let vh3;
+    let vh4;
+    let mission;
+    let vehicleList;
+
+    beforeEach(() => {
+      vh1 = new Vehicle(1, ['ISR_Plane'], 'WAITING');
+      vh2 = new Vehicle(2, ['VTOL', 'Quick_Search'], 'WAITING');
+      vh3 = new Vehicle(3, ['ISR_Plane', 'Payload_drop'], 'WAITING');
+      vh4 = new Vehicle(4, ['ISR_Plane'], 'WAITING');
+      vehicleList = [vh1, vh2, vh3, vh4];
+      mission = new ISRMission(dummyCompletionCallback, vehicleList, dummyLogger);
+    });
+
+    it('should calculate the center point of all the POIs and find the radius required to encompass all the POIs', () => {
+      // start the mission
+      const missionSetup = { plane_end_action: 'land', plane_start_action: 'takeoff' };
+      const mapping = new Map([[vh1, 'ISR_Plane']]);
+
+      mission.setVehicleMapping(mapping);
+      mission.setMissionInfo(missionSetup);
+
+      mission.missionInit();
+      vh1.vehicleUpdate({ status: 'READY' });
+      const missionData = { lat: 10.000, lng: 10.000 };
+
+      mission.missionStart(missionData);
+
+      // Send several POIs to the mission
+      const poiMessage1 = { type: 'POI', sid: 1, lat: 52.112507, lng: -8.95761 };
+      const poiMessage2 = { type: 'POI', sid: 1, lat: 52.219071, lng: -8.65764 };
+      const poiMessage3 = { type: 'POI', sid: 1, lat: 52.35235, lng: -8.95573 };
+      const poiMessage4 = { type: 'POI', sid: 1, lat: 52.01221, lng: -8.54834 };
+      mission.missionUpdate(poiMessage1);
+      mission.missionUpdate(poiMessage2);
+      mission.missionUpdate(poiMessage3);
+      mission.missionUpdate(poiMessage4);
+
+      const returnValue = mission.getTerminatedData();
+
+      chai.expect(returnValue.lat).to.be.closeTo(52.1740345, 0.0001);
+      chai.expect(returnValue.lng).to.be.closeTo(-8.77983, 0.0001);
+      chai.expect(returnValue.radius).to.be.closeTo(23960, 10);
+
+      // Add a new task to a running mission
+      mission.missionNewTask('ISR_Plane', new Task(12, 34));
+      chai.expect(mission.waitingTasks.countItemsForKey('ISR_Plane')).to.equal(1);
+
+      // Send V1 a complete message & make sure vehicle is assigned to newly added task
+      const mesg1 = { type: 'complete' };
+      mission.missionUpdate(mesg1, vh1);
+      chai.expect(mission.activeTasks.get(vh1)).to.deep.equal(new Task(12, 34));
+    });
+  });
 });

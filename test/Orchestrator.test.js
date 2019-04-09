@@ -367,11 +367,6 @@ describe('Orchestrator', () => {
       chai.expect(vehc.lng).to.be.null;
       chai.expect(vehc.status).to.be.equal('WAITING');
     });
-
-    it('should update the mission when "POI" or "COMPLETE" message is received', () => {
-
-
-    });
   });
 
   describe('+ startMission', () => {
@@ -433,12 +428,36 @@ describe('Orchestrator', () => {
       const updateMessage3 = { type: 'UPDATE', sid: 100, lat: 80, lng: -10.5, status: 'RUNNING' };
       orchestrator.processMessage(updateMessage3);
 
+      // Send messages to the orchestrator to update the running mission
+      const poiMessage1 = { type: 'POI', sid: 100, lat: 80, lng: -10.5 };
+      orchestrator.processMessage(poiMessage1);
+
       // send the complete message: this should cause the mission to end
       const completeMessage1 = { type: 'COMPLETE', sid: 100 };
       orchestrator.processMessage(completeMessage1);
 
+      /* TEST THAT THE MISSION CORRECTLY SWITCHES OVER TO THE NEXT */
       chai.expect(orchestrator.isRunning).to.be.true;
       chai.expect(orchestrator.currentMission).to.be.equal(mission2);
+
+      const updateMessage4 = { type: 'UPDATE', sid: 101, lat: 81, lng: -10.1, status: 'RUNNING' };
+      orchestrator.processMessage(updateMessage4);
+
+      const poiMessage2 = { type: 'POI', sid: 101, lat: 52.112507, lng: -8.95761 };
+      const poiMessage3 = { type: 'POI', sid: 101, lat: 52.219071, lng: -8.65764 };
+      const poiMessage4 = { type: 'POI', sid: 101, lat: 52.35235, lng: -8.95573 };
+      const poiMessage5 = { type: 'POI', sid: 101, lat: 52.01221, lng: -8.54834 };
+
+      orchestrator.processMessage(poiMessage2);
+      orchestrator.processMessage(poiMessage3);
+      orchestrator.processMessage(poiMessage4);
+      orchestrator.processMessage(poiMessage5);
+
+      const completeMessage2 = { type: 'COMPLETE', sid: 101 };
+      orchestrator.processMessage(completeMessage2);
+
+      chai.expect(orchestrator.isRunning).to.be.false;
+      chai.expect(orchestrator.currentMission).to.be.null;
     });
   });
 });

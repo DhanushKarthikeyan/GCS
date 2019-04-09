@@ -1,5 +1,6 @@
 import Mission from '../Mission';
 import Task from '../Task';
+import { distance } from '../helpers';
 
 export default class ISRMission extends Mission {
   constructor(completionCallback, vehicleList, logger) {
@@ -34,6 +35,31 @@ export default class ISRMission extends Mission {
   }
 
   getTerminatedData() {
+    // If POIs have been registered, then find data about the POIs
+    if ('POI' in this.missionDataResults) {
+      // Find center coordinates of all the POIs
+      let latSum = 0, lngSum = 0;
+      let count = 0;
+
+      for (const poi of this.missionDataResults.POI) {
+        latSum += poi.lat;
+        lngSum += poi.lng;
+        count++;
+      }
+
+      const centerAvg = { lat: latSum / count, lng: lngSum / count };
+
+      // find the radius from center to furthest poi (so area encompases all the points)
+      let radius = 0;
+      for (const poi of this.missionDataResults.POI) {
+        radius = Math.max(radius, distance(poi, centerAvg));
+      }
+
+      this.missionDataResults.lat = centerAvg.lat;
+      this.missionDataResults.lng = centerAvg.lng;
+      this.missionDataResults.radius = radius;
+    }
+
     return this.missionDataResults;
   }
 

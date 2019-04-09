@@ -300,8 +300,24 @@ export default class Orchestrator {
   endMission(nextRequired) {
     this.nextMissionRequiredData = nextRequired;
     this.currentMissionIndex++;
-    if (this.scheduledMissions.length < this.currentMissionIndex) {
-      this.startMission(nextRequired);
+    if (this.scheduledMissions.length > this.currentMissionIndex) {
+      /*
+      Attempt to start the mission automatically, but handle the case where
+      the input data to the next mission is not satisfied by the data returned
+      */
+      try {
+        this.startMission(nextRequired);
+      } catch (e) {
+        this.logError(e.message);
+
+        throw e;
+
+        if (false) {
+          // TODO: prompt user for data input
+        } else {
+          this.reset();
+        }
+      }
     } else {
       // End of missions -- reset
       this.reset();
@@ -311,9 +327,11 @@ export default class Orchestrator {
   /**
     * Reset the Orchestrator to initial state so that missions can be
     * added again.
+    *
+    * Reset does not remove the results from the last mission completion.
     */
   reset() {
-    for (const listener in this.registeredListeners) {
+    for (const listener of this.registeredListeners) {
       listener.removeHandler();
     }
     this.isRunning = false;
@@ -323,7 +341,6 @@ export default class Orchestrator {
     this.scheduledMissions = [];
     this.scheduledMissionsStatus = [];
     this.registeredListeners = [];
-    this.nextMissionRequiredData = null;
   }
 
   /**
@@ -416,9 +433,9 @@ export default class Orchestrator {
           that are part of an active mission. The message is then sent to the current
           mission.
         */
-        if (message.sid in this.currentMissionVehicles) {
+        if (vehc.id in this.currentMissionVehicles) {
           // Update the current mission that a complete message was received
-          this.scheduledMissions[this.currentMissionIndex].missionUpdate(message);
+          this.scheduledMissions[this.currentMissionIndex].missionUpdate(message, vehc);
         }
       }
     }

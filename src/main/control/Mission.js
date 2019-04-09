@@ -41,6 +41,7 @@ export default class Mission {
     this.missionSetup = {};
     this.missionStatus = 'WAITING';
     this.activeVehicleMapping = new Map();
+    this.activeMissionVehicles = {};
 
     // Keep track of waiting tasks and waiting vehicles using the job as the key
     this.waitingTasks = new ListDict();
@@ -90,6 +91,11 @@ export default class Mission {
       if (!(key in missionData)) {
         throw new Error(`Value '${key}' is a required mission parameter`);
       }
+    }
+
+    // save a copy of all the active vehicle missions to a dictionary of id => vehicle
+    for (const vehc of this.activeVehicleMapping.keys()) {
+      this.activeMissionVehicles[vehc.id] = vehc;
     }
 
     // Create tasks based on mission & create an assignment
@@ -160,7 +166,10 @@ export default class Mission {
    *
    * @param {Object} mesg received message
    * @param {Vehicle} sender the vehicle object of the sender of the message.
-   * @returns {boolean} true if the message was of type complete, false otherwise
+   * @returns {boolean} true if the message was handled by the missionUpdate method, false otherwise
+   *
+   *
+   * TODO: security/defensive programming concern: right now, all updates are handled, including vehicles not registered as active to this mission. A check should be added, and the tests should be updated to accomodate for this restriction.
    */
   missionUpdate(mesg, sender) {
     if (mesg.type.toUpperCase() === 'COMPLETE') {
@@ -268,7 +277,7 @@ export default class Mission {
    * Calls the callback to trigger the Orchestrator to schedule the next mission.
    */
   missionTerminate() {
-    for (const vehc in this.activeVehicleMapping.keys()) {
+    for (const vehc of this.activeVehicleMapping.keys()) {
       vehc.terminate();
     }
 
@@ -477,16 +486,7 @@ export default class Mission {
    * @returns {Object} object/table of the currently used vehicles with the mapping VID => vehicle object
    */
   getMissionActiveVehicles() {
-    // Get array of all the vehicles waiting for a task
-    const activeVehicles = {};
-    for (const vehc in this.waitingVehicles.keys) {
-      activeVehicles[vehc.id] = vehc;
-    }
-    // Add all the vehicles that are currently active & running
-    for (const vehc in this.activeTasks.keys()) {
-      activeVehicles[vehc.id] = vehc;
-    }
-    return activeVehicles;
+    return this.activeMissionVehicles;
   }
 
   /**
