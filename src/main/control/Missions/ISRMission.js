@@ -1,6 +1,6 @@
 import Mission from '../Mission';
 import Task from '../Task';
-import { distance } from '../helpers';
+import { distance } from '../Helpers';
 
 export default class ISRMission extends Mission {
   constructor(completionCallback, vehicleList, logger) {

@@ -416,7 +416,7 @@ describe('Orchestrator', () => {
 
       /* ===== BEGIN TEST SECTION ===== */
 
-      let startData = { lat: 90.4, lng: -12.5 };
+      const startData = { lat: 90.4, lng: -12.5 };
 
       orchestrator.startMission(startData);
 
@@ -455,6 +455,126 @@ describe('Orchestrator', () => {
 
       const completeMessage2 = { type: 'COMPLETE', sid: 101 };
       orchestrator.processMessage(completeMessage2);
+
+      chai.expect(orchestrator.isRunning).to.be.false;
+      chai.expect(orchestrator.currentMission).to.be.null;
+    });
+
+    it('should start the mission and stop when switching over to a mission that isn\'t ready', () => {
+      orchestrator = createNewDummyOrchestrator();
+
+      /* ===== PRE TEST SETUP ===== */
+
+      // connect the two new vehicles (Connect message)
+      const connectMessage1 = { type: 'CONNECT', sid: 100, jobsAvailable: ['ISR_Plane'] };
+      orchestrator.processMessage(connectMessage1);
+      const connectMessage2 = { type: 'CONNECT', sid: 101, jobsAvailable: ['ISR_Plane'] };
+      orchestrator.processMessage(connectMessage2);
+
+      vehc1 = orchestrator.getVehicleByID(100);
+      vehc2 = orchestrator.getVehicleByID(101);
+
+      // create the missions (UI Request)
+      mission1 = orchestrator.createMission('ISRMission');
+      mission2 = orchestrator.createMission('ISRMission');
+
+      // Finish setting up the missions
+      const missionSetup = { plane_end_action: 'land', plane_start_action: 'takeoff' };
+      mission1.setVehicleMapping(new Map([[vehc1, 'ISR_Plane']]));
+      mission2.setVehicleMapping(new Map([[vehc2, 'ISR_Plane']]));
+
+      mission1.setMissionInfo(missionSetup);
+      mission2.setMissionInfo(missionSetup);
+
+      // Add the set up missions (UI Request)
+      orchestrator.addMissions([mission1, mission2]);
+
+      // TEST: only make the first mission ready; mission should still be able to start
+      // the missions will initialize & wait for the vehicles to accept the job assignment
+      const updateMessage1 = { type: 'UPDATE', sid: 100, lat: 45.6, lng: 12.4, status: 'READY' };
+      orchestrator.processMessage(updateMessage1);
+
+      chai.expect(mission1.status).to.be.equal('READY');
+      chai.expect(mission2.status).to.be.equal('INITIALIZING');
+
+      /* ===== BEGIN TEST SECTION ===== */
+
+      const startData = { lat: 90.4, lng: -12.5 };
+
+      orchestrator.startMission(startData);
+
+      // verify that the mission1 is running
+      chai.expect(orchestrator.isRunning).to.be.true;
+      chai.expect(orchestrator.currentMission).to.be.equal(mission1);
+
+      // Send messages to the orchestrator to update the running mission
+      const updateMessage3 = { type: 'UPDATE', sid: 100, lat: 80, lng: -10.5, status: 'RUNNING' };
+      orchestrator.processMessage(updateMessage3);
+
+      // Send messages to the orchestrator to update the running mission
+      const poiMessage1 = { type: 'POI', sid: 100, lat: 80, lng: -10.5 };
+      orchestrator.processMessage(poiMessage1);
+
+      // send the complete message: this should cause the mission to end
+      const completeMessage1 = { type: 'COMPLETE', sid: 100 };
+      orchestrator.processMessage(completeMessage1);
+
+      /* TEST THAT THE MISSION CORRECTLY SWITCHES OVER TO THE NEXT */
+      chai.expect(orchestrator.isRunning).to.be.false;
+    });
+
+    it('should start the mission and fail when vehicles become unavailable (error out)', () => {
+      orchestrator = createNewDummyOrchestrator();
+
+      /* ===== PRE TEST SETUP ===== */
+
+      // connect the two new vehicles (Connect message)
+      const connectMessage1 = { type: 'CONNECT', sid: 100, jobsAvailable: ['ISR_Plane'] };
+      orchestrator.processMessage(connectMessage1);
+
+      vehc1 = orchestrator.getVehicleByID(100);
+
+      // create the missions (UI Request)
+      mission1 = orchestrator.createMission('ISRMission');
+
+      // Finish setting up the missions
+      const missionSetup = { plane_end_action: 'land', plane_start_action: 'takeoff' };
+      mission1.setVehicleMapping(new Map([[vehc1, 'ISR_Plane']]));
+
+      mission1.setMissionInfo(missionSetup);
+
+      // Add the set up missions (UI Request)
+      orchestrator.addMissions([mission1]);
+
+      // the missions will initialize & wait for the vehicles to accept the job assignment
+      const updateMessage1 = { type: 'UPDATE', sid: 100, lat: 45.6, lng: 12.4, status: 'READY' };
+      orchestrator.processMessage(updateMessage1);
+
+      chai.assert(orchestrator.allMissionsAreReady() === true, 'Orchestrator missions not ready or fully initialized for the test!');
+
+      /* ===== BEGIN TEST SECTION ===== */
+
+      const startData = { lat: 90.4, lng: -12.5 };
+
+      orchestrator.startMission(startData);
+
+      // verify that the mission1 is running
+      chai.expect(orchestrator.isRunning).to.be.true;
+      chai.expect(orchestrator.currentMission).to.be.equal(mission1);
+
+      // Send messages to the orchestrator to update the running mission
+      const updateMessage2 = { type: 'UPDATE', sid: 100, lat: 80, lng: -10.5, status: 'RUNNING' };
+      orchestrator.processMessage(updateMessage2);
+
+      // Send messages to the orchestrator to update the running mission
+      const poiMessage1 = { type: 'POI', sid: 100, lat: 80, lng: -10.5 };
+      orchestrator.processMessage(poiMessage1);
+
+      const updateMessage3 = { type: 'UPDATE', sid: 100, lat: 80, lng: -11, status: 'ERROR', errorMessage: 'Unhandled error' };
+      orchestrator.processMessage(updateMessage3);
+
+      /* When we add user interface for fixing errors to the mission, as of now it just ends early */
+      chai.expect(mission1.status).to.be.equal('COMPLETE');
 
       chai.expect(orchestrator.isRunning).to.be.false;
       chai.expect(orchestrator.currentMission).to.be.null;

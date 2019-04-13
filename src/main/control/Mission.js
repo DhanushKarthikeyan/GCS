@@ -457,7 +457,7 @@ export default class Mission {
         for (const job of this.missionJobTypes) {
           if (!jobSet.has(job)) {
             this.missionTerminate();
-            throw new Error('Mission cannot complete because a required mission job cannot be completed with the current vehicles');
+            this.logger.logError('Mission cannot complete because a required mission job cannot be completed with the current vehicles');
           }
         }
       }
