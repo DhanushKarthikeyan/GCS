@@ -1,4 +1,4 @@
-// import { ipcRenderer } from 'electron';
+import { ipcRenderer } from 'electron';
 import Mission from './Mission';
 import Vehicle from './Vehicle';
 import MessageHandler from './MessageHandler';
@@ -9,6 +9,23 @@ import UpdateHandler from './DataStructures/UpdateHandler';
 const { VEHICLE_DATABASE } = require('../../../resources/vehicles.json');
 
 export default class Orchestrator {
+  fail(failureMessage) {
+    const ipcMessage = {
+      type: 'failure',
+      message: failureMessage,
+    };
+    console.log('FAILURE: (in Class `Orchestrator`) ', failureMessage);
+    ipcRenderer.send('post', 'updateMessages', ipcMessage);
+  }
+
+  ipcMsg(ipcMessage) {
+    const ipcMessage = {
+      type: 'orchestrator',
+      message: ipcMessage,
+    };
+    ipcRenderer.send('post', 'updateMessages', ipcMessage);
+  }
+
   /**
    * Get the instance of the singleton Orchestrator.
    *
@@ -130,6 +147,7 @@ export default class Orchestrator {
     // if it comes back online it can be disabled
     vehicle.setActive(false);
     vehicle.setAvailable(false);
+    Orchestrator.ipcMsg(`DISCONNECT vehicle ${vehicle.id}`);
   }
 
   /*
@@ -409,6 +427,7 @@ export default class Orchestrator {
       /*
         end of CONNECT message handling
        */
+      Orchestrator.ipcMsg(`CONNECT vehicle ${message.sid}`);
     } else {
       // Every other message kind requires that the sender is defined -- verify that this is the case
       if (vehc === null) {
@@ -450,17 +469,16 @@ export default class Orchestrator {
     *   @this {Orchestrator}
     *   @param {string} vehicleID: the unique ID (UID) for the vehicle to send the `message` to.
     *   @param {JSON} message: the message to send to the vehicle with UID `vehicleID`
-    */
   sendMessage(vehicleID, message) {
     this.getVehicleByID(vehicleID).sendMessage(message);
   }
+    */
 
   /**
     *   Processes a given message from a vehicle
     *   @TODO: Add support for messages from other vehicles (only VTOL currently)
     *   @this {Orchestrator}
     *   @param {JSON} message: The message that was received from the vehicle
-    */
   handleReceivedMessage(message) {
     const srcVehicle = this.getVehicleByID(message.srcVehicleID);
     const ackMessage = { type: 'ack', received: message.type };
@@ -489,4 +507,5 @@ export default class Orchestrator {
         this.sendMessage(message.srcVehicleID, { type: 'badMessage', error: 'Bad message type' });
     }
   }
+    */
 }

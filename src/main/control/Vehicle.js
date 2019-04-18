@@ -49,6 +49,8 @@ export default class Vehicle {
     // Last epoch seconds representing last connected time
     // TODO Ensure this is valid
     this.lastConnTime = Date.now();
+
+    this.timeout = null;// setTimeout(null /* ORCHESTRATOR DEACTIVATE VEHICLE */, this.vehicleTimeoutLength);
   }
 
   get jobs() {

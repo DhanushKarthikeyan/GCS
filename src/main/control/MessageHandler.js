@@ -13,7 +13,7 @@ MESSAGE BASIC FIELDS (work to remove, consult wiki)
   sid: {string} (The SOURCE ID from where the message was sent; for the GCS, this will be "GCS")
   tid: {int} (Target ID for vehicle message is intended for; this is for blimp)
   type: {string} (Message Type)
-  time: {long int} Time (in epoch milliseconds) a unique ID for each message
+  time: {long int} Time (in epoch seconds) a unique ID for each message
   <other fields here>
 }
 */
@@ -60,10 +60,17 @@ export default class MessageHandler {
     this.messagesSent = [];
     /* List of JSON obj., ea. {ID: , type: } */
     this.messagesReceived = [];
-    // this.messageIDSeed = Math.floor(Date.now() / 1000);
-    this.messageIDSeed = Date.now();
+    this.messageIDSeed = this.now();
+    // this.messageIDSeed = Date.now();
 
     this.updateHandler = new UpdateHandler();
+  }
+
+  /**
+   * @returns { int } now: the current Unix time in seconds
+   */
+  now() {
+    return Math.floor(Date.now() / 1000);
   }
 
   /**
@@ -80,10 +87,11 @@ export default class MessageHandler {
 
   /**
    * @description Returns the next (valid) message ID
+   * @this {MessageHandler}
    * @returns {long} msgID: time in milliseconds since Unix epoch
    */
   nextMsgID() {
-    return (new Date()).now();
+    return this.now();
   }
 
   /**
@@ -94,14 +102,21 @@ export default class MessageHandler {
    *
    * @param {Vehicle} vehicle: vehicle to target
    * @param {JSON} message: message to send (must be properly formatted)
-   * this {MessageHandler} MessageHandler : instance of the MessageHandler
+   * @param {string} source: Source ID of the vehicle
+   * @this {MessageHandler} MessageHandler : instance of the MessageHandler
    */
-  sendMessageTo(vehicle, message) {
+  sendMessageTo(vehicle, message, source) {
+    // let requiresAck = true;
     /**
-     * @TODO
      * Get message,
      * Ensure message format
      */
+    if(!isValidFormat(message)) {
+      msg = fmtMsg(msg, vehicle, source);
+      if(!isValidFormat(message)) {
+        return; // abort; bad format!
+      }
+    }
     switch (message.type) {
       case 'ACK':
         this.messageOutbox = this.rmMsg(message.ackID, this.messageOutbox);
@@ -113,12 +128,7 @@ export default class MessageHandler {
         // Error: message type not recognized!
         break;
     }
-    // Select vehicle
-    // Send message
-    /**
-     * Use the EventsHandler classes and methods to send and wait for this stuff
-     */
-
+    // Send message to all needed recipients
     for (const v of this.messageRecipients(message)) {
       this.asyncSendMessage(v, message);
     }
@@ -134,18 +144,16 @@ export default class MessageHandler {
   /**
   * @description  Checks a message (`msg`) to see if it has a valid format (i.e., if all
   *               required fields have been set)
-  *
   * @param {JSON} msg: the message to check
-  * @returns {boolean} rv: true or false on success, null on error
+  * @returns {boolean} rv: true or false on success, ON ERROR RETURNS null !!!
   */
   isValidFormat(msg) {
     let rv = false;
-    if (!msg.hasOwnProperty('type')) {
+    if (!msg.vwnProperty('type')) {
       return null;
     }
     // Check message format type
-    const reqdFields = ['id', 'type', 'vehicleID'];
-
+    const reqdFields = ['id', 'type', 'tid', 'sid'];
     switch (msg.type.toUpperCase()) {
       case 'UPDATE':
         break;
@@ -194,6 +202,46 @@ export default class MessageHandler {
     return rv;
   }
 
+  /**
+   * Return a properly formatteded message (populates basic fields)
+   * @param {JSON} msg
+   */
+  fmtMsg(msg, tgt, sid) {
+    if(isValidFormat(msg)) {
+      return msg;
+    }
+    const basicFields = ['id', 'tid', 'sid', 'time', 'type'];
+    for (const field of basicFields) {
+      /* only add fiedld if not already there */
+      if (!msg.hasOwnProperty(field)) {
+        switch (field) {
+          case 'type':
+            // Cowardly refuse to send a message without a type
+            return null;
+            // break;
+          case 'id':
+            msg.id = this.nextMsgID();
+            break;
+          case 'tid':
+            msg.tid = tgt.id;
+            break;
+          case 'sid':
+            msg.sid = sid;
+            break;
+          case 'time':
+            msg.time = this.now();
+            break;
+          default:
+            break;
+        }
+      }
+    }
+    return msg;
+  }
+  /**
+   * Acknowledge a given message.
+   * @param {JSON} msg
+   */
   ack(msg) {
     // 1. Create appropriate ACK message
     const ackMsg = {
@@ -223,7 +271,10 @@ export default class MessageHandler {
     this.messagesReceived.push(msg.id);
     this.ack(msg);
     // 3. Handle the message received
-    orchestrator.getVehicleByID(msg.sid).lastConnTime = Date.now();
+    const v = orchestrator.getVehicleByID(msg.sid);
+    v.lastConnTime = Date.now();
+    clearTimeout(v.timeout);
+    v.timeout = setTimeout(orchestrator.deactivateVehicle(v), v.vehicleTimeoutLength);
     switch (msg.type.toUpperCase()) {
       /* Base messages */
       case 'CONNECT':
@@ -252,10 +303,10 @@ export default class MessageHandler {
         /**
          * @TODO messageHandler only (modify orchestrator directly)
          */
-        recipients.push('GCS');
+        recipients.push(this.orchestrator);
         break;
       case 'UPDATE':
-        recipients.push('vehicle');
+        recipients.push(this.orchestrator.getVehicleByID(msg.sid));
         break;
       case 'BADMESSAGE':
         break;
@@ -271,7 +322,7 @@ export default class MessageHandler {
       default:
         break;
     }
-    recipients.push('GCS');
+    // recipients.push('GCS');
     return recipients;
   }
 
@@ -284,8 +335,10 @@ export default class MessageHandler {
     const orchestrator = Orchestrator.getInstance();
 
     /* not sure if this will work */
-    this.updateHandler.addHandler(eventString, () => this.rmMsg(msg.id, this.messageOutbox),
-      () => orchestrator.deactivateVehicle(
+    this.updateHandler.addHandler(eventString,
+      () => this.rmMsg(msg.id, this.messageOutbox), /* remove message on sending */
+      // TODO : currently times out, should re-send message instead?
+      () => orchestrator.deactivateVehicle(         /* on timeout deactivate vehicle */
         orchestrator.getVehicleByID(msg.tid)),
       3000);
   }
