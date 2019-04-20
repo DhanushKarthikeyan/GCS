@@ -58,7 +58,12 @@ export default class Orchestrator {
     this.currentMissionIndex = 0;
     this.currentMissionVehicles = null;
     this.nextMissionRequiredData = null;
+
+    // keep a list and a dictionary. Dictionary is for fast lookup
+    // Dictionary holds key => index into the array.
+    // Yes, this is silly, but we need the list and we need a way to search the list quickly
     this.knownVehicles = [];
+    this.knownVehiclesIndexes = {};
 
     // Get the MessageHandlerInstance & set the orchestrator message handler to this
     MessageHandler.getInstance().setMessageHandler(this.processMessage.bind(this));
@@ -127,14 +132,31 @@ export default class Orchestrator {
   }
 
   /**
-   * Adds a vehicle to the known vehicle list.
+   * Add vehicle to known vehicles and to polling list.
+   *
+   * Note that if an old vehicle with the same id of the new vehicle is present,
+   * it will be replaced. Do necessary verifications that this is an intentional
+   * action before calling this function.
+   *
    * @TODO Add isActive polling (i.e., task to check if the Vehicle is disconnected/lost comms/etc.)
    * @this {Orchestrator}
    * @param {Vehicle} vehicle:   The vehicle to add to the list
    */
   addVehicle(vehicle) {
-    this.vehicleStatusUpdater.addHandler(vehicle.vehicleId, () => this.pingAgain_f(vehicle), () => this.pingAgain_f(vehicle), 1000);
-    this.knownVehicles.push(vehicle);
+    /*
+    this.vehicleStatusUpdater.addHandler(vehicle.vehicleId,
+      () => this.pingAgain_f(vehicle),
+      () => this.pingAgain_f(vehicle),
+      1000);
+    */
+
+    if (vehicle.id in this.knownVehiclesIndexes) {
+      // replace known vehicle if vehicle with id is known
+      this.knownVehicles[this.knownVehiclesIndexes[vehicle.id]] = vehicle;
+    } else {
+      // add new vehicle
+      this.knownVehiclesDict[vehicle.id] = this.knownVehicles.push(vehicle);
+    }
   }
 
   /**
@@ -376,12 +398,11 @@ export default class Orchestrator {
    *    @returns {Vehicle} v: non-null on success; null on failure
    */
   getVehicleByID(vID) {
-    for (const v of this.knownVehicles) {
-      if (v.id === vID) {
-        return v;
-      }
+    if (vID in this.knownVehiclesIndexes) {
+      return this.knownVehicles[this.knownVehiclesIndexes[vID]];
+    } else {
+      return null;
     }
-    return null;
   }
 
   /**
@@ -407,20 +428,9 @@ export default class Orchestrator {
         this.logError(`In Class 'Orchestrator', method 'processMessage': Received a connection message for VID: ${message.sid}, but a vehicle with the ID is already active`);
         return;
       }
-      const newVehc = new Vehicle(message.sid, message.jobsAvailable, 'WAITING');
 
-      let isNewVehicle = true;
-      // remove vehicle from the known vehicle list (if present) to be replaced
-      for (let i = 0; i < this.knownVehicles.length; i++) {
-        if (this.knownVehicles[i].id === newVehc.id) {
-          this.knownVehicles[i] = newVehc;
-          isNewVehicle = false;
-          break;
-        }
-      }
-      if (isNewVehicle) {
-        this.knownVehicles.push(newVehc);
-      }
+      const newVehc = new Vehicle(message.sid, message.jobsAvailable, 'WAITING');
+      this.addVehicle(newVehc);
 
       // Send a connection acknowledgment message to the target
       messageHandler.sendMessageTo(message.sid, { type: 'connectionAck' });

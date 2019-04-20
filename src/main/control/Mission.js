@@ -437,6 +437,7 @@ export default class Mission {
 
         // Remove the vehicle from the vehicle mapping
         this.activeVehicleMapping.delete(vehc);
+        delete this.activeMissionVehicles[vehc.id];
 
         // Remove the vehicle from the active tasks and reinsert the task into the waiting tasks
         if (this.activeTasks.has(vehc)) {

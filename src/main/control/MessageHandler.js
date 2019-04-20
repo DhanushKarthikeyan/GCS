@@ -18,6 +18,13 @@ MESSAGE BASIC FIELDS (work to remove, consult wiki)
 }
 */
 
+// the ID for GCS
+const GCS_SID = 0;
+// timeout time for ACK receieve in MS before a vehicle is disconnected
+const ACK_TIMEOUT_TIME = 5000;
+// time in MS for the interval between the sending of the messages in the outbox
+const MESSAGE_SENT_TIME_INTERVAL = 500;
+
 export default class MessageHandler {
   static reportFailure(failureMessage) {
     const ipcMessage = {
@@ -53,7 +60,6 @@ export default class MessageHandler {
       throw new Error('MessageHandler must be acquired with the getInstance() method!');
     }
 
-
     /* List of JSON obj., ea. repr. 1 msg. */
     this.messageOutbox = [];
     /* List of JSON obj., ea. {ID: , type: } */
@@ -63,7 +69,9 @@ export default class MessageHandler {
     this.messageIDSeed = this.now();
     // this.messageIDSeed = Date.now();
 
-    this.updateHandler = new UpdateHandler();
+    this.messagesAwaitingAck = new UpdateHandler();
+
+    // begin the sending interval
   }
 
   /**
@@ -86,12 +94,12 @@ export default class MessageHandler {
   }
 
   /**
-   * @description Returns the next (valid) message ID
-   * @this {MessageHandler}
-   * @returns {long} msgID: time in milliseconds since Unix epoch
+   * @description Returns the next (valid) message ID. Although the seed is based on the time, message id
+   * will simply increase by 1 for every message generated.
+   * @returns {long} the next usable message ID
    */
   nextMsgID() {
-    return this.now();
+    return ++this.messageIDSeed;
   }
 
   /**
@@ -247,12 +255,13 @@ export default class MessageHandler {
     const ackMsg = {
       id: this.nextMsgID(),
       tid: msg.sid,
-      sid: 'GCS',
+      sid: GCS_SID,
+      time: this.getTime(),
       type: 'ACK',
       ackID: msg.id,
     };
     // 2. Send ACK message
-    this.asyncSendMessage(msg.sid, ackMsg);
+    this.asyncSendMessage(ackMsg);
   }
 
   /**
@@ -327,20 +336,28 @@ export default class MessageHandler {
   }
 
   /**
-   * Schedules* a message to be sent using events in UpdateHandlers
+   * Schedules a message to be sent & registers listeners for its ACK
+   * using events in UpdateHandlers
+   *
    * @param {JSON} msg : The message that is to be sent
    */
   asyncSendMessage(msg) {
     const eventString = `${msg.tid}-${msg.mID}-${msg.type}`;
     const orchestrator = Orchestrator.getInstance();
 
-    /* not sure if this will work */
-    this.updateHandler.addHandler(eventString,
-      () => this.rmMsg(msg.id, this.messageOutbox), /* remove message on sending */
-      // TODO : currently times out, should re-send message instead?
-      () => orchestrator.deactivateVehicle(         /* on timeout deactivate vehicle */
-        orchestrator.getVehicleByID(msg.tid)),
-      3000);
+    /* add the message to the handler so that it handles when an ack is received */
+    this.messagesAwaitingAck.addHandler(eventString,
+      () => {
+        // remove the message from the outbox
+        this.rmMsg(msg.id, this.messageOutbox);
+        // return true so that the event is removed
+        return true;
+      },
+      () => {
+        // timeout handler: deactivate the unresponsive vehicle!
+        orchestrator.deactivateVehicle(orchestrator.getVehicleByID(msg.tid));
+      },
+      ACK_TIMEOUT_TIME);
   }
 
   /**
